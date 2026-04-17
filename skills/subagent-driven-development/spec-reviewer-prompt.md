@@ -2,6 +2,9 @@
 
 Use this template when dispatching a spec compliance reviewer subagent.
 
+Dispatch this reviewer with the same model as the current controller agent and `xhigh` reasoning.
+Controller should close this reviewer immediately after the verdict is recorded.
+
 **Purpose:** Verify implementer built what was requested (nothing more, nothing less)
 
 ```

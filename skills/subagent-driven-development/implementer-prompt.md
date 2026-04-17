@@ -2,6 +2,10 @@
 
 Use this template when dispatching an implementer subagent.
 
+Dispatch this implementer with the same model as the current controller agent and `medium` reasoning.
+Controller should assign it the task worktree and task branch prepared via `superpowers:using-git-worktrees`.
+Controller should close this implementer immediately after the task is integrated back into the controller development branch and no further fixes are needed.
+
 ```
 Task tool (general-purpose):
   description: "Implement Task N: [task name]"
@@ -15,6 +19,20 @@ Task tool (general-purpose):
     ## Context
 
     [Scene-setting: where this fits, dependencies, architectural context]
+
+    ## Dependency Metadata
+
+    - Depends on: [None | Task M, Task K]
+    - This task was dispatched because all dependencies are complete.
+    - Write scope for this task: [explicit file paths]
+
+    Do not modify files outside the declared write scope unless you escalate with NEEDS_CONTEXT.
+
+    If you discover required changes outside write scope, stop and report:
+    - Status: NEEDS_CONTEXT or DONE_WITH_CONCERNS
+    - Exact out-of-scope files
+    - Why they are required
+    Do not continue with out-of-scope edits.
 
     ## Before You Begin
 
@@ -32,14 +50,31 @@ Task tool (general-purpose):
     1. Implement exactly what the task specifies
     2. Write tests (following TDD if task says to)
     3. Verify implementation works
-    4. Commit your work
+    4. Update plan checkboxes (see Checkbox Update Rule below)
     5. Self-review (see below)
-    6. Report back
+    6. Report back (DO NOT COMMIT YET)
 
-    Work from: [directory]
+    Work from: [assigned task worktree prepared via superpowers:using-git-worktrees]
 
     **While you work:** If you encounter something unexpected or unclear, **ask questions**.
     It's always OK to pause and clarify. Don't guess or make assumptions.
+
+    ## Checkbox Update Rule
+
+    After each step's verification passes, immediately update that step's checkbox in the plan file:
+    `- [ ]` → `- [x]`
+
+    This is your responsibility, not the controller's. The plan file should already be
+    present in your assigned task worktree; update it as you go. The controller will
+    receive your checkbox updates when it integrates your task branch.
+
+    ## Commit Ownership Rule
+
+    The controller is responsible for the task completion commit after reviews pass.
+
+    Therefore, **do not run `git commit`** in this implementation pass.
+    Stage changes if needed (including plan checkbox updates), but leave commit creation
+    to the controller after reviews pass and the task branch is integrated.
 
     ## Code Organization
 
@@ -68,8 +103,8 @@ Task tool (general-purpose):
 
     **How to escalate:** Report back with status BLOCKED or NEEDS_CONTEXT. Describe
     specifically what you're stuck on, what you've tried, and what kind of help you need.
-    The controller can provide more context, re-dispatch with a more capable model,
-    or break the task into smaller pieces.
+    The controller can provide more context, re-dispatch with the same model and
+    `medium` reasoning, break the task into smaller pieces, or escalate to the human.
 
     ## Before Reporting Back: Self-Review
 

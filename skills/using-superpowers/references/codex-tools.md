@@ -6,8 +6,8 @@ Skills use Claude Code tool names. When you encounter these in a skill, use your
 |-----------------|------------------|
 | `Task` tool (dispatch subagent) | `spawn_agent` (see [Named agent dispatch](#named-agent-dispatch)) |
 | Multiple `Task` calls (parallel) | Multiple `spawn_agent` calls |
-| Task returns result | `wait` |
-| Task completes automatically | `close_agent` to free slot |
+| Task returns result | `wait_agent` |
+| Task completes automatically | `close_agent` immediately after the output is recorded to free slot |
 | `TodoWrite` (task tracking) | `update_plan` |
 | `Skill` tool (invoke a skill) | Skills load natively — just follow the instructions |
 | `Read`, `Write`, `Edit` (files) | Use your native file tools |
@@ -22,7 +22,14 @@ Add to your Codex config (`~/.codex/config.toml`):
 multi_agent = true
 ```
 
-This enables `spawn_agent`, `wait`, and `close_agent` for skills like `dispatching-parallel-agents` and `subagent-driven-development`.
+This enables `spawn_agent`, `wait_agent`, and `close_agent` for skills like `subagent-driven-development`.
+
+## Agent Slot Hygiene
+
+- Never leave a completed agent open after you have recorded its result.
+- Close reviewers immediately after their verdict is captured.
+- Close implementers, fixers, and investigators immediately after their task lane no longer needs more edits.
+- Idle agents still consume coordination capacity; release them aggressively.
 
 ## Named agent dispatch
 
@@ -37,6 +44,10 @@ When a skill says to dispatch a named agent type:
 2. Read the prompt content
 3. Fill any template placeholders (`{BASE_SHA}`, `{WHAT_WAS_IMPLEMENTED}`, etc.)
 4. Spawn a `worker` agent with the filled content as the `message`
+
+If your installation only exposes `skills/` (for example via a skills-only symlink),
+repo-level `agents/*.md` files may not be visible. Prefer the skill-local prompt
+template when one exists.
 
 | Skill instruction | Codex equivalent |
 |-------------------|------------------|
@@ -72,8 +83,9 @@ skills can dispatch named agent types directly.
 
 ## Environment Detection
 
-Skills that create worktrees or finish branches should detect their
-environment with read-only git commands before proceeding:
+Skills that create task worktrees or complete the controller
+development branch should detect their environment with read-only git
+commands before proceeding:
 
 ```bash
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
@@ -82,12 +94,12 @@ BRANCH=$(git branch --show-current)
 ```
 
 - `GIT_DIR != GIT_COMMON` → already in a linked worktree (skip creation)
-- `BRANCH` empty → detached HEAD (cannot branch/push/PR from sandbox)
+- `BRANCH` empty → detached HEAD (cannot branch/push/PR from this sandbox)
 
-See `using-git-worktrees` Step 0 and `finishing-a-development-branch`
-Step 1 for how each skill uses these signals.
+See `using-git-worktrees` for task-worktree setup and
+`subagent-driven-development` for controller-branch completion.
 
-## Codex App Finishing
+## Codex App Branch Handoff
 
 When the sandbox blocks branch/push operations (detached HEAD in an
 externally managed worktree), the agent commits all work and informs
