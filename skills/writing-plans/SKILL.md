@@ -11,6 +11,10 @@ Write implementation plans by keeping the controller in coordination mode, dispa
 
 Assume implementers will have limited context and will take the easiest path available. The plan must make the correct implementation the easiest implementation. It must not leave room for mock logic, placeholder behavior, fake integrations, or "real implementation later" escapes.
 
+**Non-negotiable subagent rule:** This skill REQUIRES subagents. When subagent spawning is available in the current harness and authorized in the current session, the controller MUST use exactly one writer subagent for drafting/revision and one fresh reviewer subagent per review round. Controller-only drafting or controller-only review is a workflow failure, not an acceptable shortcut.
+
+**No silent fallback:** If the current session requires explicit user permission before spawning subagents and that permission has not been granted yet, stop and request authorization before drafting. Do not silently continue with a controller-only fallback.
+
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
 **Execution context:** Approved plans are executed with `superpowers:subagent-driven-development`. Task worktree creation, merge-back, and cleanup belong to `superpowers:using-git-worktrees`; reference those skills instead of redefining their mechanics here.
@@ -26,19 +30,31 @@ Assume implementers will have limited context and will take the easiest path ava
 - The controller coordinates and records verdicts.
 - The writer subagent writes and revises the plan.
 - The reviewer subagent reviews and returns findings; it does not directly rewrite the plan.
+- This skill does not permit controller-only replacement of the writer/reviewer loop.
+
+## Authorization Gate (Mandatory)
+
+Before starting the plan workflow:
+
+1. Confirm that subagent spawning is available in the current harness.
+2. If the current session requires explicit user authorization for subagents and that authorization has not yet been granted, ask for it and pause.
+3. Only begin drafting after the writer/reviewer subagent workflow is actually available.
+
+If the environment or session policy prevents subagent use, this skill is blocked. Do not rewrite the workflow into a controller-only substitute.
 
 ## Mandatory Workflow
 
-1. The controller reads the approved spec and enough repo context to explain the problem, architecture constraints, and existing patterns.
-2. The controller chooses the target plan path.
-3. The controller dispatches one writer subagent using `./plan-writer-prompt.md` with the same model as the controller and `xhigh` reasoning.
-4. The writer subagent saves the initial plan draft to the target path and reports back.
-5. The controller dispatches one fresh reviewer subagent using `./plan-document-reviewer-prompt.md` with the same model as the controller and `xhigh` reasoning.
-6. The reviewer returns blocking and/or non-blocking findings. The controller records the verdict and immediately closes that reviewer.
-7. The controller sends the findings back to the same writer subagent, which revises the same plan file.
-8. After each writer revision, the controller dispatches a fresh reviewer. Do not reuse reviewers across rounds.
-9. Keep the writer subagent through the write/review/revise loop unless the workflow pauses for user input. Close it once the plan is approved or the workflow pauses.
-10. If the writer reports `NEEDS_CONTEXT` or `BLOCKED` because the spec or repo context is insufficient, resolve that first. Do not let the writer invent requirements to keep the loop moving.
+1. The controller verifies the writer/reviewer subagent workflow is available and authorized. If not, request authorization and pause.
+2. The controller reads the approved spec and enough repo context to explain the problem, architecture constraints, and existing patterns.
+3. The controller chooses the target plan path.
+4. The controller dispatches one writer subagent using `./plan-writer-prompt.md` with the same model as the controller and `xhigh` reasoning.
+5. The writer subagent saves the initial plan draft to the target path and reports back.
+6. The controller dispatches one fresh reviewer subagent using `./plan-document-reviewer-prompt.md` with the same model as the controller and `xhigh` reasoning.
+7. The reviewer returns blocking and/or non-blocking findings. The controller records the verdict and immediately closes that reviewer.
+8. The controller sends the findings back to the same writer subagent, which revises the same plan file.
+9. After each writer revision, the controller dispatches a fresh reviewer. Do not reuse reviewers across rounds.
+10. Keep the writer subagent through the write/review/revise loop unless the workflow pauses for user input. Close it once the plan is approved or the workflow pauses.
+11. If the writer reports `NEEDS_CONTEXT` or `BLOCKED` because the spec or repo context is insufficient, resolve that first. Do not let the writer invent requirements to keep the loop moving.
 
 ## Review Focus And Round Control
 
@@ -50,6 +66,7 @@ Every plan review must explicitly evaluate:
 - Dependency order and parallel execution safety
 - Internal consistency across tasks, files, names, types, and commands
 - Whether an implementer could follow the plan literally and still ship mock, stub, hardcoded, or placeholder logic instead of the real requirement
+- Whether contract-level success (status code/response payload/persisted state flags) is incorrectly used as a substitute for required runtime execution semantics
 
 Use two severity levels only:
 
@@ -64,6 +81,27 @@ Round limits are cumulative for the entire plan:
 - If a review after round `5` finds only `Non-blocking` issues and no `Blocking` issues, accept the plan and proceed.
 - If `Blocking` issues remain after round `10`, stop the loop and discuss the unresolved blockers with the user before continuing.
 - Do not interpret this as "5 rounds plus 10 more." There is one cumulative round counter per plan.
+
+## Runtime Semantics Coverage (Mandatory)
+
+For any workflow where a trigger is expected to launch substantive execution (especially asynchronous or multi-stage work), the plan MUST specify both layers:
+
+- Contract layer: API/CLI shape, status codes, persisted state fields.
+- Execution layer: which component performs the real work, how entrypoints invoke it, and how progress/terminal state is observed.
+
+Mandatory constraints:
+
+- At least one task must own orchestration wiring from public entrypoints (CLI/API/Web action) to the execution component.
+- A plan must not treat an intermediate state flip (for example `queued`/`running`) as completion when the spec requires downstream stage processing.
+- If phased delivery intentionally ships a facade first, the plan must state that scope cut explicitly, describe user-visible impact, and include concrete follow-up tasks in the same plan unless the human partner explicitly approves deferral.
+- Every long-running workflow must have at least one liveness/progress verification step (for example batch rows advancing, artifacts appearing, timestamps moving, or terminal status reached).
+
+## Acceptance Fidelity Requirements (Mandatory)
+
+- Acceptance items that claim end-to-end behavior must execute through public entrypoints, not only internal services.
+- Direct persistence mutation is allowed for fixture setup only; it is forbidden as a substitute for runtime transitions that the implementation is supposed to perform.
+- For each critical user journey, include at least one smoke step that proves runtime behavior beyond response contract checks.
+- AC mapping tables must reference test functions that actually verify the claimed behavior; stale or renamed mappings are blocking issues.
 
 ## Scope Check
 
@@ -228,6 +266,9 @@ Every step must contain the actual content an engineer needs. These are plan fai
 - References to types, functions, APIs, or methods not defined in any task
 - "Use a mock/stub/placeholder for now" or "wire the real integration later"
 - Hardcoded success paths, fake data, or temporary no-op implementations that could satisfy the plan text without satisfying the real requirement
+- "Minimal real semantics" language that only mutates state but skips required execution stages
+- Contract-only acceptance checks that never verify runtime progress for long-running workflows
+- Tests that simulate expected runtime transitions by manually mutating persistent state instead of executing the real trigger path
 
 ## Writer Draft Check
 
@@ -239,6 +280,7 @@ Before the writer subagent reports a draft or revision back to the controller, i
 4. Parallelism quality: the `Parallel Execution Plan` does not claim fake independence across overlapping write scopes
 5. Mock-escape simulation: an implementer following the plan literally cannot complete a task with fake behavior and still claim success
 6. Scope budgets: every task stays within the declared file and line budgets
+7. Runtime-semantic parity: acceptance steps prove real execution behavior, not only contract-layer success
 
 This writer self-check does not replace independent review.
 
@@ -252,6 +294,7 @@ This writer self-check does not replace independent review.
 Never:
 
 - Write the whole plan directly in the controller session when subagents are available
+- Replace the writer/reviewer loop with a controller-only draft or controller-only review because delegation feels inconvenient
 - Reuse the same reviewer across revision rounds
 - Keep a reviewer open after its verdict is recorded
 - Let the reviewer patch the plan directly instead of handing findings back to the writer

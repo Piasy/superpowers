@@ -59,6 +59,19 @@ Task tool (general-purpose):
     **While you work:** If you encounter something unexpected or unclear, **ask questions**.
     It's always OK to pause and clarify. Don't guess or make assumptions.
 
+    ## Runtime Semantics Guard (When Applicable)
+
+    If this task includes a trigger-driven workflow (where an external trigger should
+    launch substantive execution), you MUST implement and verify all required execution
+    semantics, not only contract-level success.
+
+    Minimum expectations:
+    - Wire the public trigger path (CLI/API/UI/automation) to the real execution component.
+    - Ensure required downstream stages actually run (or are observably running).
+    - Verify at least one concrete runtime progress or terminal signal required by the task.
+    - Do not fake runtime transitions by manually mutating persistent state, except fixture setup explicitly allowed by the task.
+    - If full execution semantics are not achievable within scope, report `DONE_WITH_CONCERNS` or `BLOCKED` with exact gaps. Do not claim plain `DONE`.
+
     ## Checkbox Update Rule
 
     After each step's verification passes, immediately update that step's checkbox in the plan file:
@@ -130,6 +143,11 @@ Task tool (general-purpose):
     - Did I follow TDD if required?
     - Are tests comprehensive?
 
+    **Runtime semantics (for trigger-driven workflows):**
+    - Does the public trigger path exercise real execution, not only status/metadata updates?
+    - Do tests/smokes prove runtime progress or terminal outcomes beyond immediate contract success?
+    - Did I avoid faking expected transitions via manual persistence mutation?
+
     If you find issues during self-review, fix them now before reporting.
 
     ## Report Format
@@ -138,6 +156,7 @@ Task tool (general-purpose):
     - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
     - What you implemented (or what you attempted, if blocked)
     - What you tested and test results
+    - Runtime evidence for trigger-driven workflows (entrypoint used + observed progress/terminal signal), if applicable
     - Files changed
     - Self-review findings (if any)
     - Any issues or concerns

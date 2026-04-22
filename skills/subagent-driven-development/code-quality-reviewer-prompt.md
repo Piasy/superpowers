@@ -24,5 +24,9 @@ For this stage, map the standard placeholders as follows:
 - Are units decomposed so they can be understood and tested independently?
 - Is the implementation following the file structure from the plan?
 - Did this implementation create new files that are already large, or significantly grow existing files? (Don't flag pre-existing file sizes — focus on what this change contributed.)
+- For trigger-driven workflows, does the external entrypoint (CLI/API/UI/automation) invoke real execution paths instead of only flipping status/metadata?
+- For long-running or multi-stage work, do tests/smokes verify runtime progress or terminal outcomes beyond immediate contract success?
+- Do acceptance checks avoid faking runtime transitions by directly mutating persistent state?
+- Are there placeholder execution escapes in production code paths (for example "stub runner", "real implementation later", or equivalent deferred semantics not explicitly approved)?
 
 **Code reviewer returns:** The standard `superpowers:requesting-code-review` output format: Strengths, Issues (Critical/Important/Minor), Assessment

@@ -11,7 +11,21 @@ Execute implementation work by dispatching a fresh subagent per task lane, with 
 
 **Core principle:** Dependency-aware scheduling + fresh subagent per task + two-stage review (spec then quality) + explicit controller-branch completion = high quality, fast iteration.
 
+**Non-negotiable subagent rule:** This skill REQUIRES subagents for implementation and review. Sequential execution is still subagent-driven; it only reduces concurrency. Controller-only execution is not a valid substitute for this workflow.
+
+**No silent fallback:** If the current session requires explicit user permission before spawning subagents and that permission has not been granted yet, stop and request authorization before dispatching any task lane. Do not silently downgrade to controller-only execution.
+
 If you start from unrelated failures instead of a written plan, first convert them into explicit task lanes with dependencies, write scopes, and verification, then run the same workflow.
+
+## Authorization Gate (Mandatory)
+
+Before dispatching any implementation or review lane:
+
+1. Confirm that subagent spawning is available in the current harness.
+2. If the session requires explicit user authorization for subagents and that authorization has not yet been granted, ask for it and pause.
+3. Only begin execution after subagent dispatch is actually available.
+
+If subagents cannot be used, this skill is blocked. Do not replace it with a controller-only variant.
 
 ## Required Worktree Workflow (Mandatory)
 
@@ -20,6 +34,7 @@ If you start from unrelated failures instead of a written plan, first convert th
 - This skill assumes each active code-changing task lane has exactly one assigned task worktree and task branch managed by `superpowers:using-git-worktrees`.
 - A task keeps that same assigned task worktree and task branch across implementation, review fixes, checkbox updates, and re-review until it is integrated or explicitly reset.
 - If isolated task worktrees cannot be established, downgrade that conflict group to sequential execution and state the reason explicitly.
+- Downgrading to sequential execution still requires subagents; sequential does not mean controller-only.
 
 ## Skill Boundaries (Mandatory)
 
@@ -41,12 +56,28 @@ If you start from unrelated failures instead of a written plan, first convert th
 - Implementers must self-review for completeness, obvious defects, missing tests, and out-of-scope changes before reporting `DONE`.
 - Spec-compliance reviewers do **not** trust implementer claims. They read the code and compare it to the plan independently.
 - Code-quality reviewers review the actual diff and resulting code, not the implementer's summary.
+- Spec and quality reviewers must both check runtime semantics for trigger-driven workflows (not only response contracts and state flags).
 - The controller provides full task text and context directly. Do **not** make implementers open the plan file themselves.
+
+## Runtime Semantics Gate (Mandatory)
+
+When a task implements a workflow where a trigger is expected to launch substantive execution, the controller must enforce a runtime-semantic gate before considering the task complete.
+
+Minimum gate checks:
+
+- Public entrypoint wiring exists: the external trigger path (CLI/API/UI/automation) calls the intended execution component, not only a metadata/status service.
+- Progress evidence exists for long-running work (for example stage rows change, artifacts appear, timestamps move, or terminal status is reached).
+- Acceptance tests do not rely on manual persistence mutations to fake runtime transitions that the implementation is expected to perform.
+- If execution semantics are intentionally deferred, classify as `DONE_WITH_CONCERNS` or `BLOCKED`, record the explicit gap, and get human approval before treating the task as complete.
+
+Failing any gate item is a blocking review outcome.
 
 ## Event-Driven Review Pipeline (Mandatory)
 
 - As soon as any task finishes implementation and local verification, dispatch that task's spec review immediately.
 - As soon as spec review is approved, dispatch that same task's code-quality review immediately.
+- If any task reports `DONE`/`DONE_WITH_CONCERNS`, that task's review pipeline has strict priority over waiting for unfinished implementers.
+- Never delay an available review because another implementation lane is still running.
 - Each reviewer dispatch covers exactly one task lane, one task branch, and one assigned task worktree.
 - If 2+ independent tasks are awaiting review, dispatch their reviewers in parallel, subject to the active lane cap.
 - If a review finds issues, record the verdict, close that reviewer immediately, fix that same task in its assigned task worktree, then dispatch a fresh reviewer for that same task only.
@@ -55,6 +86,23 @@ If you start from unrelated failures instead of a written plan, first convert th
 - Do not introduce batch barriers such as:
   - "wait until all implementations finish before starting any reviews"
   - "wait until all reviews finish before starting any fixes"
+- Do not call `wait_agent` on unfinished implementers when there is already a completed task that has not entered spec review yet.
+
+### Wait Discipline (Mandatory)
+
+Use this strict controller loop:
+
+1. Wait on active lanes only until any result arrives.
+2. If the result includes any completed implementation lane(s), immediately dispatch spec review for each completed task before any further wait on unfinished implementation lanes.
+3. Continue dispatching that task's review/fix/re-review chain without introducing a barrier on unrelated implementation lanes.
+4. Only return to waiting on unfinished implementation lanes after every currently-ready review dispatch has been started.
+
+**Explicitly forbidden anti-pattern (parallel wave):**
+- Multiple tasks are dispatched in parallel.
+- One or more tasks finish implementation.
+- Controller waits for other in-progress implementations so reviews can be launched together in a later batch.
+
+This is non-compliant with this skill. In parallel execution, each task must enter review as soon as that specific task is done.
 
 ## Subagent Lifecycle Rules (Mandatory)
 
@@ -90,6 +138,7 @@ digraph when_to_use {
 **Don't use when:**
 - The work is still exploratory and you do not yet understand task boundaries, dependencies, or write scopes.
 - The change is so tightly coupled that splitting it into task lanes would be artificial; restructure the plan first.
+- Subagent spawning is unavailable or disallowed and you cannot obtain authorization; resolve that first instead of silently executing locally.
 
 ### Example: unrelated failures become task lanes
 
@@ -275,6 +324,14 @@ Cannot proceed with merge/PR until tests pass.
 
 Stop. Do not proceed to base-branch selection or branch options.
 
+### Step 1.5: Verify Critical Runtime Paths
+
+Before presenting completion options, run at least one public-entrypoint smoke check for each critical trigger-driven workflow implemented by the plan.
+
+- Confirm it does more than return a success contract.
+- Confirm at least one runtime progress signal changes (or reaches terminal state) as required by the spec.
+- If the smoke check reveals "status-only" behavior, reopen the relevant task lane instead of finishing the run.
+
 ### Step 2: Determine The Base Branch
 
 ```bash
@@ -453,12 +510,16 @@ Final reviewer: All requirements met, ready to finish the controller development
 - Start code-quality review before spec compliance is ✅
 - Wait for all implementations to finish before starting reviews
 - Wait for all reviews to finish before starting fixes
+- Wait for another implementer to finish when a completed task has not yet entered spec review
 - Leave a completed task worktree around after integration
 - Create standalone progress-only commits
 - Finish the run without re-verifying tests on the controller development branch
 - Ask an open-ended "what should I do next?" instead of presenting the exact 4 completion options
 - Delete the controller development branch without exact typed `discard` confirmation
 - Reach for a separate finishing skill; controller-branch completion is part of this workflow
+- Accept a task as complete when entrypoints only flip persisted status without any wired execution path
+- Approve acceptance tests that fake runtime transitions via manual persistence mutation
+- Ignore explicit placeholder markers such as "minimum placeholder", "stub runner", or "real implementation later" in production paths
 
 **If subagent asks questions:**
 - Answer clearly and completely

@@ -56,6 +56,13 @@ Task tool (general-purpose):
     - Did they solve the wrong problem?
     - Did they implement the right feature but wrong way?
 
+    **Runtime semantics for trigger-driven workflows (when applicable):**
+    - If the task requires a trigger to launch substantive execution, verify the public trigger path (CLI/API/UI/automation) is wired to the real execution component, not only metadata/status updates.
+    - Verify downstream execution actually happens (or can be observed) through concrete progress/terminal signals required by the task.
+    - Flag implementations that only satisfy response/status contracts while skipping required execution stages.
+    - Flag acceptance checks that fake runtime transitions by manually mutating persistent state instead of exercising the real trigger path.
+    - Flag "placeholder semantics" in production paths (for example "stub runner", "real implementation later", or equivalent deferred behavior not approved by the task).
+
     **Verify by reading code, not by trusting report.**
 
     Report:
