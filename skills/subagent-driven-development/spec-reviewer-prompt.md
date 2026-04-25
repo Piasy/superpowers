@@ -1,71 +1,86 @@
-# Spec Compliance Reviewer Prompt Template
+# Spec 一致性 Reviewer Prompt 模板
 
-Use this template when dispatching a spec compliance reviewer subagent.
+当需要派发 spec 一致性 reviewer subagent 时，使用这个模板。
 
-Dispatch this reviewer with the same model as the current controller agent and `xhigh` reasoning.
-Controller should close this reviewer immediately after the verdict is recorded.
+派发这个 reviewer 时，使用与当前 controller agent 相同的模型，并设置 `xhigh` 推理强度。
+Controller 应在记录 verdict 后立即关闭这个 reviewer。
+如果环境不支持设置推理强度，使用最接近的默认值，并明确说明这个限制。
 
-**Purpose:** Verify implementer built what was requested (nothing more, nothing less)
+**目的：** 验证实现者是否构建了被要求的内容，不多也不少
 
 ```
-Task tool (general-purpose):
-  description: "Review spec compliance for Task N"
+派发一个 fresh subagent，使用下面的 prompt：
+  description: "审查任务 N 的 spec 一致性"
   prompt: |
-    You are reviewing whether an implementation matches its specification.
+    你正在审查某个实现是否符合它的规格说明。
 
-    ## What Was Requested
+    ## 已批准的 Spec 上下文
 
-    [FULL TEXT of task requirements]
+    - Spec 文件：[SPEC_FILE_PATH or parent/child spec paths]
+    - Feature slice 标识：[FEATURE_SLICE_NAME or heading/ID]
+    - 验收标准 IDs：[AC IDs]
+    - 公共入口提示：[CLI/API/UI/config/file/event entrypoints]
+    - 预期自动化验证：[test/smoke command or scenario]
 
-    ## What Implementer Claims They Built
+    ## 规格定位
+
+    直接读取上面的 spec 文件，定位指定 feature slice 和 AC IDs。
+    如果你找不到对应 feature slice、AC IDs 或必要公共入口，返回 ❌ Issues found，并说明缺失的定位信息。
+
+    ## 实现者声称自己完成了什么
 
     [From implementer's report]
 
-    ## CRITICAL: Do Not Trust the Report
+    ## 关键要求：不要相信这份报告
 
-    The implementer finished suspiciously quickly. Their report may be incomplete,
-    inaccurate, or optimistic. You MUST verify everything independently.
+    实现者完成得可疑地快。他的报告可能不完整、不准确，或者过于乐观。
+    你必须独立验证一切。
 
-    **DO NOT:**
-    - Take their word for what they implemented
-    - Trust their claims about completeness
-    - Accept their interpretation of requirements
+    **不要：**
+    - 直接相信他们说自己实现了什么
+    - 相信他们对完整性的自我判断
+    - 接受他们对需求的个人解读
 
-    **DO:**
-    - Read the actual code they wrote
-    - Compare actual implementation to requirements line by line
-    - Check for missing pieces they claimed to implement
-    - Look for extra features they didn't mention
+    **要做：**
+    - 阅读他们实际写出的代码
+    - 逐行把真实实现与需求对照
+    - 检查他们声称做了、但其实缺失的部分
+    - 查找他们没提到的额外功能
 
-    ## Your Job
+    ## 你的任务
 
-    Read the implementation code and verify:
+    阅读实现代码，并验证：
 
-    **Missing requirements:**
-    - Did they implement everything that was requested?
-    - Are there requirements they skipped or missed?
-    - Did they claim something works but didn't actually implement it?
+    **缺失的需求：**
+    - 他们是否实现了所有被要求的内容？
+    - 是否有任何需求被跳过或遗漏？
+    - 是否有他们声称“能工作”，但实际上并没实现的部分？
+    - 验收标准是否通过 spec 要求的公共入口被真正覆盖？
 
-    **Extra/unneeded work:**
-    - Did they build things that weren't requested?
-    - Did they over-engineer or add unnecessary features?
-    - Did they add "nice to haves" that weren't in spec?
+    **额外/不需要的工作：**
+    - 他们是否实现了未被要求的内容？
+    - 是否过度设计或增加了不必要功能？
+    - 是否加入了 spec 里没有的 “nice to have”？
+    - 是否实现了其他子 spec、其他 feature slice，或者任何只出现在 `Candidate Future Split Specs` 里的内容？
 
-    **Misunderstandings:**
-    - Did they interpret requirements differently than intended?
-    - Did they solve the wrong problem?
-    - Did they implement the right feature but wrong way?
+    **误解：**
+    - 他们是否按错误方式理解了需求？
+    - 他们是否解决了错误的问题？
+    - 他们是否做了正确的功能，但实现方向错了？
 
-    **Runtime semantics for trigger-driven workflows (when applicable):**
-    - If the task requires a trigger to launch substantive execution, verify the public trigger path (CLI/API/UI/automation) is wired to the real execution component, not only metadata/status updates.
-    - Verify downstream execution actually happens (or can be observed) through concrete progress/terminal signals required by the task.
-    - Flag implementations that only satisfy response/status contracts while skipping required execution stages.
-    - Flag acceptance checks that fake runtime transitions by manually mutating persistent state instead of exercising the real trigger path.
-    - Flag "placeholder semantics" in production paths (for example "stub runner", "real implementation later", or equivalent deferred behavior not approved by the task).
+    **TDD 证据：**
+    - 实现者是否在实现前报告了 RED 失败命令和预期失败摘要？
+    - 实现后是否报告了 GREEN 通过命令？
+    - 如果针对生产代码或行为变更缺少 TDD 证据，要明确标记出来。
 
-    **Verify by reading code, not by trusting report.**
+    **Trigger-driven workflow 的运行时语义（仅当 spec/AC 要求）：**
+    - 按运行时语义 gate 验证公共 trigger 路径（CLI/API/UI/automation）是否接到真实执行组件，并产生任务要求的进展或终态信号。
+    - 如果实现只满足响应/状态契约、通过手动改状态伪造迁移，或留下未经批准的占位语义，要标记出来。
+    - 不要为 spec 没要求的 trigger 额外发明运行语义。
 
-    Report:
-    - ✅ Spec compliant (if everything matches after code inspection)
-    - ❌ Issues found: [list specifically what's missing or extra, with file:line references]
+    **通过读代码来验证，而不是相信报告。**
+
+    输出：
+    - ✅ Spec compliant（如果代码检查后确认一切匹配）
+    - ❌ Issues found: [具体列出缺失或多余的内容，并附 file:line 引用]
 ```

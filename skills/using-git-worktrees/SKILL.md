@@ -1,92 +1,91 @@
 ---
 name: using-git-worktrees
-description: Use when starting feature work that needs isolation from the current workspace or before executing implementation plans
+description: Use when starting feature work that needs isolation from the current workspace or before implementing approved specs
 ---
 
-# Using Git Worktrees
+# 使用 Git Worktree
 
-## Overview
+## 概览
 
-Git worktrees create isolated workspaces sharing the same repository, allowing work on multiple branches simultaneously without switching.
+Git worktree 会在共享同一个仓库的前提下创建隔离工作区，让任务分支能在独立目录中完成实现、验证和清理。
 
-**Core principle:** Repo-root `.worktrees/` + one task branch per task worktree + merge-back into the controller development branch + immediate cleanup = reliable isolation.
+**核心原则：** 仓库根目录下的 `.worktrees/` + 每个任务 worktree 对应一个任务分支 + 已批准变更集成回 `controller` 开发分支 + 集成后立即清理 = 可靠隔离。
 
-**Announce at start:** "I'm using the using-git-worktrees skill to set up an isolated workspace."
+**开始时要明确说明：** “我正在使用 `using-git-worktrees` skill 来建立隔离工作区。”
 
-## Single Source Of Truth
+## 单一事实来源
 
-This skill is the single source of truth for task-worktree rules in this repo.
+这个 skill 是所有 skills 关于任务 worktree 规则的单一事实来源。
 
-It owns:
-- Controller development branch detection
-- One task branch + one task worktree per code-changing task lane
-- Stable task-worktree assignment for that lane until integration or explicit reset
-- Merge-back into the controller development branch
-- Immediate task-worktree cleanup after integration
+它负责：
+- 检测 `controller` 开发分支
+- 为调用方指定的会改代码任务创建一个任务分支和一个任务 worktree
+- 在任务被集成或显式重置前，为该任务稳定保留同一个任务 worktree
+- 已批准变更集成回 `controller` 开发分支的 worktree/分支机制
+- 集成后立即清理任务 worktree
 
-Other skills should reference this skill instead of restating worktree mechanics.
+其他 skill 应引用这个 skill，而不是重复描述 worktree 机制。
 
-## Fixed Directory Rule (Mandatory)
+## 固定目录规则（强制）
 
-- Always create task worktrees under the repository root's `.worktrees/` directory.
-- Do not use `worktrees/`, `~/.config/superpowers/worktrees/`, or any other alternate location.
-- If `.worktrees/` does not exist, create it at the repo root before creating task worktrees.
-- Record the branch checked out when the workflow begins. That controller development branch is the integration target for every task branch created during the run.
-- Each active code-changing task lane gets exactly one task branch and one matching `.worktrees/<task-branch>` directory.
-- Keep that same task branch and task worktree assigned to the task across implementation, review fixes, checkbox updates, and re-review until the task is integrated or explicitly reset.
-- Never let multiple coding agents write in the same task worktree.
-- Shared coordination files stay in the controller development branch workspace.
-- If isolated task worktrees cannot be established, do not run parallel code edits; downgrade to sequential execution.
+- 始终在仓库根目录的 `.worktrees/` 下创建任务 worktree。
+- 不要使用 `worktrees/`、`~/.config/superpowers/worktrees/` 或任何其他位置。
+- 如果 `.worktrees/` 不存在，先在仓库根目录创建，再创建任务 worktree。
+- 记录工作流开始时检出的那个分支。这个 `controller` 开发分支是本轮中所有任务分支的统一集成目标。
+- 每个由调用工作流分配的、会改代码的任务，必须且只能有一个任务分支，以及一个对应的 `.worktrees/<task-branch>` 目录。
+- 在任务被集成或显式重置前，始终为该任务保留同一个任务分支和任务 worktree，包括实现、review 修复、checkbox 更新和 re-review 阶段。
+- 任务 worktree 只能由该任务的当前负责人写入。
+- 共享协调文件必须保留在 `controller` 开发分支工作区中。
+- 如果无法建立隔离任务 worktree，就停下并先解决这个阻塞；不要降级到非隔离执行。
 
-## Safety Verification
+## 安全校验
 
-**MUST verify `.worktrees/` is ignored before creating any task worktree:**
+**在创建任何任务 worktree 前，必须先确认 `.worktrees/` 被忽略：**
 
 ```bash
 git check-ignore -q .worktrees
 ```
 
-**If NOT ignored:**
+**如果没有被忽略：**
 
-Per Jesse's rule "Fix broken things immediately":
-1. Add `.worktrees/` to `.gitignore`
-2. Commit the change
-3. Proceed with task worktree creation
+1. 把 `.worktrees/` 加入 `.gitignore`
+2. 提交这个改动
+3. 然后再继续创建任务 worktree
 
-**Why critical:** Prevents accidentally committing task worktree contents to the repository.
+**为什么这很关键：** 这样能避免误把任务 worktree 的内容提交进仓库。
 
-## Creation Steps
+## 创建步骤
 
-### 1. Detect Repo Root and Controller Development Branch
+### 1. 检测仓库根目录和 `controller` 开发分支
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
 CONTROLLER_BRANCH=$(git branch --show-current)
 ```
 
-**If `CONTROLLER_BRANCH` is empty:** Stop and ask your human partner how this detached HEAD should be handled before creating task branches.
+**如果 `CONTROLLER_BRANCH` 为空：** 停下来，先问你的 human partner 这个 detached HEAD 该怎么处理，再创建任务分支。
 
-### 2. Ensure `.worktrees/` Exists at Repo Root
+### 2. 确保仓库根目录下存在 `.worktrees/`
 
 ```bash
 mkdir -p "$REPO_ROOT/.worktrees"
 git check-ignore -q .worktrees
 ```
 
-### 3. Create Task Worktree and Task Branch
+### 3. 创建任务 Worktree 和任务分支
 
 ```bash
 TASK_BRANCH="$BRANCH_NAME"
 TASK_PATH="$REPO_ROOT/.worktrees/$TASK_BRANCH"
 
-# Create worktree with new branch from the controller development branch
+# 从 controller 开发分支创建新分支，并建立 worktree
 git worktree add "$TASK_PATH" -b "$TASK_BRANCH" "$CONTROLLER_BRANCH"
 cd "$TASK_PATH"
 ```
 
-### 4. Run Project Setup
+### 4. 运行项目初始化
 
-Auto-detect and run appropriate setup:
+自动识别并执行合适的初始化步骤：
 
 ```bash
 # Node.js
@@ -96,6 +95,10 @@ if [ -f package.json ]; then npm install; fi
 if [ -f Cargo.toml ]; then cargo build; fi
 
 # Python
+# 如果 controller 工作区使用本地 .venv，就在 task worktree 中也创建一个
+if [ -d "$REPO_ROOT/.venv" ] && [ ! -d .venv ]; then python3 -m venv .venv; fi
+# 如果 task worktree 中存在 .venv，后续 Python 初始化步骤都在这个 venv 中执行
+if [ -d .venv ]; then . .venv/bin/activate; fi
 if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 if [ -f pyproject.toml ]; then poetry install; fi
 
@@ -103,165 +106,165 @@ if [ -f pyproject.toml ]; then poetry install; fi
 if [ -f go.mod ]; then go mod download; fi
 ```
 
-### 5. Verify Clean Baseline
+### 5. 验证干净基线
 
-Run tests to ensure the task worktree starts clean:
+运行测试，确保任务 worktree 的起点是干净的：
 
 ```bash
-# Examples - use the project-appropriate command
+# 示例：使用项目对应的测试命令
 npm test
 cargo test
 pytest
 go test ./...
 ```
 
-**If tests fail:** Report failures, ask whether to proceed or investigate.
+**如果测试失败：** 报告失败，并询问要继续还是先调查。
 
-**If tests pass:** Report ready.
+**如果测试通过：** 报告已就绪。
 
-### 6. Report Location
+### 6. 报告位置
 
 ```
-Task worktree ready at <repo-root>/.worktrees/<task-branch>
-Task branch <task-branch> created from <controller-branch>
-Tests passing (<N> tests, 0 failures)
-Ready to implement <feature-name>
+任务 worktree 已就绪：<repo-root>/.worktrees/<task-branch>
+任务分支 <task-branch> 已从 <controller-branch> 创建
+测试通过（<N> tests, 0 failures）
+可以开始实现 <feature-name>
 ```
 
-## Task Completion Cleanup
+## 任务完成后的清理
 
-After final review passes and the controller integrates the task branch back into the controller development branch:
+当最终 review 通过，且 `controller` 已将任务分支集成回 `controller` 开发分支后：
 
 ```bash
 git -C "$REPO_ROOT" worktree remove "$TASK_PATH"
 git -C "$REPO_ROOT" branch -d "$TASK_BRANCH"
 ```
 
-The controller should clean up immediately after integration. Do not leave completed task worktrees sitting around.
+`Controller` 应在集成完成后立刻清理。不要把已完成的任务 worktree 留在本地。
 
-If a session resumes and a task worktree already exists:
-- Reuse it if the task is incomplete and its state matches tracked progress.
-- Remove it immediately if the task is already integrated.
+如果恢复一个已有的 session，且任务 worktree 已经存在：
+- 如果任务还没完成，且状态与追踪进度一致，就复用它。
+- 如果任务已经集成完成，就立刻删掉它。
 
-## Scope Boundary
+## 范围边界
 
-This skill owns task worktree creation, per-task branch isolation, merge-back, and cleanup.
+这个 skill 负责：任务 worktree 创建、按任务隔离分支、已批准变更回到 `controller` 开发分支的 worktree/分支机制，以及集成后的清理。
 
-It does **not** decide when reviews happen, whether reviewers are reused or replaced, or how task review/fix/re-review loops run.
+它**不负责**决定任务完成 commit 的内容或归属；这些由调用它的工作流定义。
 
-It does **not** decide what to do with the controller development branch after all task worktrees are gone.
+它**不负责**决定 review 何时发生、reviewer 是否复用，或任务 review/fix/re-review 循环如何运行。
 
-When no task worktrees remain, return control to the calling workflow for the final merge/PR/keep/discard decision.
+它**不负责**在所有任务 worktree 都清理完之后，`controller` 开发分支接下来该怎么处理。
 
-## Quick Reference
+当任务 worktree 全部清理完后，把控制权还给调用它的工作流，让对方决定 `controller` 开发分支接下来怎么处理。
 
-| Situation | Action |
-|-----------|--------|
-| `.worktrees/` missing | Create it at repo root |
-| `.worktrees/` exists | Verify ignored, then use it |
-| `.worktrees/` not ignored | Add `.worktrees/` to `.gitignore` + commit |
-| Controller development branch missing | Stop and ask |
-| Need parallel code edits | Create one task worktree per code-changing task lane |
-| Task complete and integrated | Remove the task worktree, then delete the task branch |
-| Leftover completed task worktree on resume | Remove it immediately |
-| No task worktrees remain | Return to the caller for the controller branch decision |
-| Tests fail during baseline | Report failures + ask |
-| No package.json/Cargo.toml | Skip dependency install |
+## 快速参考
 
-## Common Mistakes
+| 情况 | 动作 |
+|------|------|
+| `.worktrees/` 不存在 | 在仓库根目录创建它 |
+| `.worktrees/` 已存在 | 先验证它被忽略，再使用 |
+| `.worktrees/` 没被忽略 | 把 `.worktrees/` 加进 `.gitignore` 并提交 |
+| 找不到 `controller` 开发分支 | 停下并询问 |
+| 任务完成并已集成 | 删除任务 worktree，然后删除任务分支 |
+| 恢复时发现已完成任务残留 worktree | 立即删除 |
+| 没有任何任务 worktree 了 | 把 `controller` 分支决策交回调用方 |
+| 基线测试失败 | 报告失败并询问 |
+| 没有 `package.json` / `Cargo.toml` | 跳过依赖安装 |
 
-### Skipping ignore verification
+## 常见错误
 
-- **Problem:** Task worktree contents get tracked, pollute git status
-- **Fix:** Always use `git check-ignore -q .worktrees` before creating any task worktree
+### 跳过忽略校验
 
-### Using the wrong directory
+- **问题：** 任务 worktree 内容会被 git 跟踪，污染 `git status`
+- **修正：** 在创建任何任务 worktree 前，始终执行 `git check-ignore -q .worktrees`
 
-- **Problem:** Creates inconsistency, breaks cleanup expectations
-- **Fix:** Always use repo-root `.worktrees/`
+### 用错目录
 
-### Forgetting the controller development branch
+- **问题：** 造成不一致，破坏清理预期
+- **修正：** 始终使用仓库根目录的 `.worktrees/`
 
-- **Problem:** Task branches diverge and no longer have a single integration target
-- **Fix:** Record the starting branch once and create every task branch from it
+### 忘记 `controller` 开发分支
 
-### Sharing one task worktree between multiple coding agents
+- **问题：** 任务分支会逐渐分叉，失去统一集成目标
+- **修正：** 一开始记录好起始分支，并从它创建所有任务分支
 
-- **Problem:** Agents interfere, overwrite each other, and make integration ambiguous
-- **Fix:** Give each active code-changing task lane its own task worktree
+### 共享同一个任务 worktree
 
-### Moving review fixes to a different worktree
+- **问题：** agent 会互相干扰、覆盖改动，让集成归属变得模糊
+- **修正：** 每个由调用工作流分配的、会改代码的任务都应拥有自己的任务 worktree
 
-- **Problem:** Breaks task ownership, confuses status, and makes re-review ambiguous
-- **Fix:** Keep review fixes in the same assigned task worktree until the task is integrated or explicitly reset
+### 把 review 修复移到另一个 worktree
 
-### Leaving completed task worktrees around
+- **问题：** 会打破任务归属，混淆状态，让 re-review 失去明确对象
+- **修正：** 在任务被集成或显式重置前，始终在同一个已分配的任务 worktree 中修复 review 问题
 
-- **Problem:** Idle worktrees accumulate, confuse status, and waste slots
-- **Fix:** Remove the task worktree and delete the task branch immediately after integration
+### 已完成任务的 worktree 不清理
 
-### Proceeding with failing tests
+- **问题：** 空闲 worktree 会不断堆积，混淆状态并浪费资源
+- **修正：** 一旦任务集成完成，立刻删除任务 worktree 并删除任务分支
 
-- **Problem:** Can't distinguish new bugs from pre-existing issues
-- **Fix:** Report failures, get explicit permission to proceed
+### 在测试失败的情况下继续推进
 
-### Using this skill for the final branch decision
+- **问题：** 无法区分新引入的 bug 和历史遗留问题
+- **修正：** 先报告失败，并取得明确许可后再继续
 
-- **Problem:** Mixes task-worktree mechanics with controller-branch workflow decisions
-- **Fix:** Hand control back to the calling workflow once all task worktrees are gone
+### 用这个 skill 来决定最终分支命运
 
-### Hardcoding setup commands
+- **问题：** 把任务 worktree 机制、任务完成 commit 归属和 `controller` 分支工作流决策混在一起
+- **修正：** 本 skill 只约束 worktree/分支机制；任务完成 commit 和后续分支处置交还调用工作流
 
-- **Problem:** Breaks on projects using different tools
-- **Fix:** Auto-detect from project files (`package.json`, etc.)
+### 硬编码初始化命令
 
-## Example Workflow
+- **问题：** 换了项目工具链就会失效
+- **修正：** 根据项目文件自动识别（如 `package.json`）
+
+## 工作流示例
 
 ```
-You: I'm using the using-git-worktrees skill to set up an isolated workspace.
+You: 我正在使用 `using-git-worktrees` skill 来建立隔离工作区。
 
-[Record controller development branch: feature/auth]
-[Create repo-root .worktrees/ if needed]
-[Verify ignored - git check-ignore confirms .worktrees/ is ignored]
-[Create worktree: git worktree add /repo/.worktrees/task-auth -b task-auth feature/auth]
-[Run npm install]
-[Run npm test - 47 passing]
+[记录 controller 开发分支：feature/auth]
+[如果需要，在仓库根目录创建 .worktrees/]
+[验证忽略状态 - git check-ignore 确认 .worktrees/ 已被忽略]
+[创建 worktree: git worktree add /repo/.worktrees/task-auth -b task-auth feature/auth]
+[运行 npm install]
+[运行 npm test - 47 passing]
 
-Task worktree ready at /Users/jesse/myproject/.worktrees/task-auth
-Task branch task-auth created from feature/auth
-Tests passing (47 tests, 0 failures)
-Ready to implement auth feature
+任务 worktree 已就绪：/Users/jesse/myproject/.worktrees/task-auth
+任务分支 task-auth 已从 feature/auth 创建
+测试通过（47 tests, 0 failures）
+可以开始实现 auth feature
 ```
 
 ## Red Flags
 
-**Never:**
-- Create a task worktree outside repo-root `.worktrees/`
-- Create a task worktree without verifying `.worktrees/` is ignored
-- Skip baseline test verification
-- Proceed with failing tests without asking
-- Forget which branch is the controller development branch
-- Let multiple coding agents write in the same task worktree
-- Leave a completed task worktree unremoved after integration
-- Use this skill to decide the final fate of the controller development branch
+**绝不要：**
+- 在仓库根目录 `.worktrees/` 之外创建任务 worktree
+- 没验证 `.worktrees/` 已被忽略，就创建任务 worktree
+- 跳过基线测试验证
+- 在测试失败时不经询问就继续
+- 忘记哪个分支是 `controller` 开发分支
+- 让无关负责人写入同一个任务 worktree
+- 任务集成后还把已完成的任务 worktree 留着不删
+- 用这个 skill 来决定 `controller` 开发分支的最终命运
 
-**Always:**
-- Use repo-root `.worktrees/`
-- Verify `.worktrees/` is ignored
-- Create each task branch from the controller development branch
-- Give each active code-changing task lane its own task worktree
-- Merge/cherry-pick each completed task back into the controller development branch
-- Remove the task worktree immediately after integration
-- Delete the task branch after the task worktree is gone
-- Auto-detect and run project setup
-- Verify a clean test baseline
+**始终要：**
+- 使用仓库根目录的 `.worktrees/`
+- 验证 `.worktrees/` 已被忽略
+- 从 `controller` 开发分支创建每个任务分支
+- 给每个由调用工作流分配的、会改代码的任务分配一个任务 worktree
+- 按调用工作流要求，把每个完成任务的已批准变更集成回 `controller` 开发分支
+- 在集成后立即删除任务 worktree
+- 在任务 worktree 删除后删除任务分支
+- 自动识别并运行项目初始化
+- 验证一条干净的测试基线
 
-## Integration
+## 集成关系
 
-**Called by:**
-- **brainstorming** (Phase 4) - REQUIRED when design is approved and implementation follows
-- **subagent-driven-development** - REQUIRED before executing code-changing tasks; owns review/fix/re-review orchestration for those isolated task worktrees
-- Any workflow needing isolated task worktrees
+**被以下工作流调用：**
+- **subagent-driven-development** - 在执行会改代码的任务前必须使用；该 skill 负责这些隔离任务 worktree 上的 review/fix/re-review 编排
+- 任何需要隔离任务 worktree 的工作流
 
-**Referenced by review workflows:**
-- **requesting-code-review** - Review requests may use the task-scoped branch/worktree context supplied by the caller, but that skill does not own worktree lifecycle
+**被 review 工作流引用：**
+- **requesting-code-review** - review 请求可以使用调用方提供的任务分支 / 任务 worktree 上下文，但该 skill 不拥有 worktree 生命周期

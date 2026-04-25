@@ -33,7 +33,7 @@ This enables `spawn_agent`, `wait_agent`, and `close_agent` for skills like `sub
 
 ## Named agent dispatch
 
-Claude Code skills reference named agent types like `superpowers:code-reviewer`.
+Claude Code skills reference named agent types like `code-reviewer`.
 Codex does not have a named agent registry — `spawn_agent` creates generic agents
 from built-in roles (`default`, `explorer`, `worker`).
 
@@ -51,7 +51,7 @@ template when one exists.
 
 | Skill instruction | Codex equivalent |
 |-------------------|------------------|
-| `Task tool (superpowers:code-reviewer)` | `spawn_agent(agent_type="worker", message=...)` with `code-reviewer.md` content |
+| `Task tool (code-reviewer)` | `spawn_agent(agent_type="worker", message=...)` with `code-reviewer.md` content |
 | `Task tool (general-purpose)` with inline prompt | `spawn_agent(message=...)` with the same prompt |
 
 ### Message framing

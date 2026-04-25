@@ -1,550 +1,256 @@
 ---
 name: subagent-driven-development
-description: Use when executing an implementation plan or coordinating 2+ independent code-changing task lanes in the current session
+description: Use when implementing an approved spec with task-specific code-changing subagents in the current session
 ---
 
-# Subagent-Driven Development
+# Subagent 驱动开发
 
-Execute implementation work by dispatching a fresh subagent per task lane, with two-stage review after each task, immediate integration of approved task branches, and explicit controller-branch completion at the end.
+基于已批准的 spec 执行实现工作：按 feature slice 顺序派发全新的 implementer subagent，每个任务通过 spec review 和 code-quality review 后立即集成回 `controller` 开发分支，最后在 `controller` 分支完成整体验证。
 
-**Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session's context or history — you construct exactly what they need. This also preserves your own context for coordination work.
+**核心原则：** 已批准的 spec 是事实来源；每个任务使用隔离 worktree、全新 subagent、两阶段 review、同任务 fix/re-review 循环；通过后立即集成、更新 spec status、清理 worktree 并关闭 agent。
 
-**Core principle:** Dependency-aware scheduling + fresh subagent per task + two-stage review (spec then quality) + explicit controller-branch completion = high quality, fast iteration.
+**不可谈判：** 这个 skill 强制使用 subagent 做实现和 review，并假设当前 harness 已具备可用的 subagent 能力。不能用 controller-only 执行替代。
 
-**Non-negotiable subagent rule:** This skill REQUIRES subagents for implementation and review. Sequential execution is still subagent-driven; it only reduces concurrency. Controller-only execution is not a valid substitute for this workflow.
+**分支参考禁令：** 除非 human partner 明确要求，否则严禁参考仓库内其他分支的代码实现。当前分支上的已批准 spec、当前工作树和现有代码才是事实来源。
 
-**No silent fallback:** If the current session requires explicit user permission before spawning subagents and that permission has not been granted yet, stop and request authorization before dispatching any task lane. Do not silently downgrade to controller-only execution.
+如果手上只有零散失败或模糊请求，先用 `brainstorming` 把行为、验收标准、公共入口和验证方式沉淀为已批准 spec，再运行本工作流。
 
-If you start from unrelated failures instead of a written plan, first convert them into explicit task lanes with dependencies, write scopes, and verification, then run the same workflow.
+## Spec Gate（强制）
 
-## Authorization Gate (Mandatory)
+在派发任何实现或 review 任务前，先确认：
 
-Before dispatching any implementation or review lane:
+1. 这项工作已有一份已批准的 spec。
+2. 如果这项工作使用父/子 spec，除非 human partner 明确要求，否则当前轮次只实现一个已批准子 spec；不要实现其他子 spec，也不要实现父 spec 中仍列在 `Candidate Future Split Specs` 里的内容。
+3. 每个待实现 feature slice 都有 `Implementation status: Not done`、具体行为、公共接口、验收标准和自动化验证指引。
 
-1. Confirm that subagent spawning is available in the current harness.
-2. If the session requires explicit user authorization for subagents and that authorization has not yet been granted, ask for it and pause.
-3. Only begin execution after subagent dispatch is actually available.
+如果 spec 缺少必要行为、公共入口、验收标准或验证细节，停止实现，回到 `brainstorming` 修订。不要在实现工作流里发明产品/API/UI 行为，也不要使用独立于 spec 之外的“实现任务文档”。
 
-If subagents cannot be used, this skill is blocked. Do not replace it with a controller-only variant.
+## Worktree 与 Skill 边界（强制）
 
-## Required Worktree Workflow (Mandatory)
+- 在派发任何会改代码的任务前，先调用 `using-git-worktrees`。
+- 每个会改代码的任务都有且只有一个由 `using-git-worktrees` 管理的任务 worktree 和任务分支。
+- 同一个任务在实现、review 修复和 re-review 期间始终复用同一个任务 worktree，直到集成或显式重置。
+- 共享协调文件，包括 spec 中的 `Implementation status`，只在 `controller` 开发分支工作区更新。
+- `using-git-worktrees` 是任务 worktree 机制的事实来源；它约束任务 worktree/任务分支创建、稳定复用、集成机制和清理。
+- `requesting-code-review` 负责 code-quality reviewer 的标准契约、上下文打包、严重级别框架和输出格式。
+- 本 skill 负责 spec reviewer prompt、review 阶段包装、按 spec 顺序调度、任务级 fix/re-review 循环、fresh reviewer 规则和 agent 生命周期。
 
-- Before dispatching any code-changing task, invoke `superpowers:using-git-worktrees`.
-- That skill owns controller development branch detection, isolated task worktree creation, merge-back mechanics, and task-worktree cleanup.
-- This skill assumes each active code-changing task lane has exactly one assigned task worktree and task branch managed by `superpowers:using-git-worktrees`.
-- A task keeps that same assigned task worktree and task branch across implementation, review fixes, checkbox updates, and re-review until it is integrated or explicitly reset.
-- If isolated task worktrees cannot be established, downgrade that conflict group to sequential execution and state the reason explicitly.
-- Downgrading to sequential execution still requires subagents; sequential does not mean controller-only.
+## 任务执行规则（强制）
 
-## Skill Boundaries (Mandatory)
+- 当前任务未完成 spec review、code-quality review、集成和清理前，不要开启下一个会改代码的实现任务。
+- Subagent 不继承 controller 的完整 session 历史；controller 只构造该任务真正需要的输入。
+- Controller 必须提供已批准 spec 路径、feature slice 标识、AC ID 集合、公共入口提示、验证预期和必要代码上下文。
+- Implementer 和 spec reviewer 必须直接读取 spec 文件来定位当前 slice 和 AC。
+- 实现者在报告 `DONE` 前必须自审完整性、明显缺陷和缺失测试。
+- 实现者不更新 spec status checkbox。
+- 任务通过双 review 后，controller 负责把已批准变更集成到 `controller` 开发分支、更新对应 `Implementation status`，并创建包含实际代码/测试变更的任务完成 commit；随后按 `using-git-worktrees` 清理任务 worktree，并关闭该任务 agent。
+- 不要创建只记录进度、不含实际实现的独立 commit。
 
-- `superpowers:using-git-worktrees` owns task worktree assignment, task branch isolation, merge-back, and cleanup.
-- `superpowers:requesting-code-review` owns the standard code-reviewer contract used for code-quality review: review context packaging, placeholders, findings severity framework, and standard output format.
-- This skill owns the spec-compliance reviewer prompt, workflow-specific review-stage wrappers, dependency scheduling, task-lane review timing, task-scoped fix/re-review loops, fresh-reviewer re-review, and agent lifecycle.
+## Review Gate（强制）
 
-## Parallel Execution Hard Rules (Mandatory)
+- 任务完成实现和本地验证后，立刻派发该任务的 spec reviewer。
+- Spec reviewer 不相信实现者自述，必须独立阅读代码，并与已批准 spec 逐项比对。
+- Spec review 通过后，立刻派发同一任务的 code-quality reviewer。
+- Code-quality reviewer 审查真实 diff 和最终代码，而不是实现者摘要。
+- 每次 reviewer 派发只覆盖一个任务、一个任务分支和一个任务 worktree。
+- Review 找到问题时，记录 verdict 后立即关闭 reviewer；同一个 implementer/fixer 在同一个任务 worktree 中修复；下一轮只为该任务派发全新的 reviewer。
+- 当前任务一旦进入 review / fix / re-review 链，就持续推进到通过或明确阻塞。
 
-- If 2+ tasks are `ready`, independent, and have disjoint write scopes, you **MUST** dispatch them in parallel. Do not serialize by default.
-- The controller may keep at most 5 active task lanes at once. A task's implementation, review, and fix loop occupies one lane until that task is complete or paused.
-- Shared coordination files other than the plan stay with the controller development branch only.
-- Each implementer subagent itself updates its own task's step checkboxes from its assigned task worktree immediately after each step's verification passes. The controller must not do this on the implementer's behalf.
-- After a task passes final review, the controller integrates that task branch back into the controller development branch, creates the task completion commit there, cleans up its task worktree via `superpowers:using-git-worktrees`, and immediately closes that task's agents.
-- If two ready tasks touch the same file or resource, run them sequentially.
+## 运行时语义 Gate（强制）
 
-## Review Posture (Mandatory)
+当 spec/AC 要求某个公共 trigger 启动实质性执行时，controller、spec reviewer 和 code-quality reviewer 都必须检查运行时语义。不要为 spec 没要求的 trigger 发明运行语义。
 
-- Implementers must self-review for completeness, obvious defects, missing tests, and out-of-scope changes before reporting `DONE`.
-- Spec-compliance reviewers do **not** trust implementer claims. They read the code and compare it to the plan independently.
-- Code-quality reviewers review the actual diff and resulting code, not the implementer's summary.
-- Spec and quality reviewers must both check runtime semantics for trigger-driven workflows (not only response contracts and state flags).
-- The controller provides full task text and context directly. Do **not** make implementers open the plan file themselves.
+最低检查项：
 
-## Runtime Semantics Gate (Mandatory)
+- 公共入口连线存在：外部 trigger 路径（CLI/API/UI/automation）调用目标执行组件，而不只是元数据/状态服务。
+- 存在运行进度证据：长耗时任务至少能看到阶段行变化、产物出现、时间戳推进或到达终态等信号。
+- 验收测试不能依赖手动修改持久化状态来伪造本应由实现自动完成的运行时状态迁移。
+- 如果执行语义被有意延期，必须标为 `DONE_WITH_CONCERNS` 或 `BLOCKED`，记录明确缺口，并在把任务视为完成前获得人工批准。
 
-When a task implements a workflow where a trigger is expected to launch substantive execution, the controller must enforce a runtime-semantic gate before considering the task complete.
+任意一项 gate 未通过，都是阻塞级 review 结果。
 
-Minimum gate checks:
+## Subagent 生命周期（强制）
 
-- Public entrypoint wiring exists: the external trigger path (CLI/API/UI/automation) calls the intended execution component, not only a metadata/status service.
-- Progress evidence exists for long-running work (for example stage rows change, artifacts appear, timestamps move, or terminal status is reached).
-- Acceptance tests do not rely on manual persistence mutations to fake runtime transitions that the implementation is expected to perform.
-- If execution semantics are intentionally deferred, classify as `DONE_WITH_CONCERNS` or `BLOCKED`, record the explicit gap, and get human approval before treating the task as complete.
+- 不要把已完成或空闲的 agent 留着备用。
+- 每个 spec reviewer 和 code-quality reviewer 的 verdict 一旦被记录，立刻关闭它。
+- 要求修改的 reviewer 也要在记录问题后关闭；下一轮 review 使用 fresh reviewer。
+- 除非任务被显式暂停或移交，同一个 implementer/fixer 贯穿该任务的 review-fix-re-review 循环。
+- 一旦 code-quality review 通过，且 controller 已创建任务完成 commit 并清理任务 worktree，立刻关闭该任务的 implementer/fixer agent。
+- 在 Codex 中，只要任务 agent 空闲，就显式调用 `close_agent`。
 
-Failing any gate item is a blocking review outcome.
+## 何时使用
 
-## Event-Driven Review Pipeline (Mandatory)
+```mermaid
+flowchart TD
+    A{是否已有已批准的 spec？}
+    B{feature slice 能否映射为清晰任务？}
+    C[subagent-driven-development]
+    D[先 brainstorming 或修订 spec]
 
-- As soon as any task finishes implementation and local verification, dispatch that task's spec review immediately.
-- As soon as spec review is approved, dispatch that same task's code-quality review immediately.
-- If any task reports `DONE`/`DONE_WITH_CONCERNS`, that task's review pipeline has strict priority over waiting for unfinished implementers.
-- Never delay an available review because another implementation lane is still running.
-- Each reviewer dispatch covers exactly one task lane, one task branch, and one assigned task worktree.
-- If 2+ independent tasks are awaiting review, dispatch their reviewers in parallel, subject to the active lane cap.
-- If a review finds issues, record the verdict, close that reviewer immediately, fix that same task in its assigned task worktree, then dispatch a fresh reviewer for that same task only.
-- If a review batch cannot be isolated by task/worktree, downgrade that batch to sequential review and record why.
-- Keep other independent tasks running in parallel; do not block them on unrelated review/fix cycles.
-- Do not introduce batch barriers such as:
-  - "wait until all implementations finish before starting any reviews"
-  - "wait until all reviews finish before starting any fixes"
-- Do not call `wait_agent` on unfinished implementers when there is already a completed task that has not entered spec review yet.
-
-### Wait Discipline (Mandatory)
-
-Use this strict controller loop:
-
-1. Wait on active lanes only until any result arrives.
-2. If the result includes any completed implementation lane(s), immediately dispatch spec review for each completed task before any further wait on unfinished implementation lanes.
-3. Continue dispatching that task's review/fix/re-review chain without introducing a barrier on unrelated implementation lanes.
-4. Only return to waiting on unfinished implementation lanes after every currently-ready review dispatch has been started.
-
-**Explicitly forbidden anti-pattern (parallel wave):**
-- Multiple tasks are dispatched in parallel.
-- One or more tasks finish implementation.
-- Controller waits for other in-progress implementations so reviews can be launched together in a later batch.
-
-This is non-compliant with this skill. In parallel execution, each task must enter review as soon as that specific task is done.
-
-## Subagent Lifecycle Rules (Mandatory)
-
-- Never keep completed or idle agents open "just in case".
-- Close each spec reviewer immediately after its verdict is captured.
-- Close each code-quality reviewer immediately after its verdict is captured.
-- If a reviewer requests changes, close that reviewer after its findings are recorded; the next review pass uses a fresh reviewer.
-- Keep the implementer/fixer assigned to that task lane through its review-fix-re-review loop unless the lane is explicitly paused or handed off.
-- Once code-quality review passes and the controller has integrated that task back into the controller development branch, immediately close the implementer/fixer agent for that task. The approving reviewer should already have been closed when its verdict was recorded.
-- In Codex, explicitly call `close_agent` for every task agent as soon as it becomes idle.
-
-## When to Use
-
-```dot
-digraph when_to_use {
-    "Have a plan or clear task lanes?" [shape=diamond];
-    "Can each lane have clear dependencies + write scope?" [shape=diamond];
-    "subagent-driven-development" [shape=box];
-    "Brainstorm or write/restructure plan first" [shape=box];
-
-    "Have a plan or clear task lanes?" -> "Can each lane have clear dependencies + write scope?" [label="yes"];
-    "Have a plan or clear task lanes?" -> "Brainstorm or write/restructure plan first" [label="no"];
-    "Can each lane have clear dependencies + write scope?" -> "subagent-driven-development" [label="yes"];
-    "Can each lane have clear dependencies + write scope?" -> "Brainstorm or write/restructure plan first" [label="no"];
-}
+    A -- 是 --> B
+    A -- 否 --> D
+    B -- 是 --> C
+    B -- 否 --> D
 ```
 
-**Use when:**
-- You already have an implementation plan to execute, even if only some tasks can run in parallel.
-- You have 2+ unrelated bugs, failures, or code-change requests that can be translated into explicit task lanes with dependencies and write scopes.
-- Each task lane can have one owner, one task worktree, its own review loop, and independent integration back into the controller development branch.
+**适用场景：**
+- 已批准 spec 中的 feature slice 可以拆成清晰、可独立 review 的任务。
+- 若干 bug、失败项或变更请求已经整理为带验收标准和验证方式的 spec feature slice。
+- 每个任务都能做到：一个 owner、一个任务 worktree、一套独立 review 循环，并独立集成回 `controller` 开发分支。
 
-**Don't use when:**
-- The work is still exploratory and you do not yet understand task boundaries, dependencies, or write scopes.
-- The change is so tightly coupled that splitting it into task lanes would be artificial; restructure the plan first.
-- Subagent spawning is unavailable or disallowed and you cannot obtain authorization; resolve that first instead of silently executing locally.
+**不要在以下场景使用：**
+- 工作仍在探索阶段，任务边界还不清楚。
+- 变更耦合过紧，暂时拆不出清晰任务；先修订 spec。
 
-### Example: unrelated failures become task lanes
+## 流程
 
-Input:
-- `tests/auth/login.test.ts` redirect failure
-- `tests/api/users.test.ts` returns 500
-- `tests/components/Button.test.tsx` snapshot mismatch
-- `tests/utils/date.test.ts` timezone bug
+1. 读取已批准 spec，按 spec 中出现顺序提取所有 `Implementation status: Not done` 的 feature slice，以及对应行为、AC、公共入口和验证方式，并初始化 TodoWrite。
+2. 选择 spec 顺序中的下一个未完成 feature slice。
+3. 用 `using-git-worktrees` 为该任务准备任务 worktree 和任务分支。
+4. 派发 implementer subagent；如需补充上下文，先回答清楚再开始实现。
+5. Implementer 以 TDD 方式实现、验证并自审。
+6. 派发 spec reviewer；若失败，由同一个 implementer 在同一个任务 worktree 中修复，并用 fresh reviewer 重审。
+7. Spec review 通过后，派发 code-quality reviewer；若失败，重复同任务 fix / fresh re-review。
+8. 双 review 通过后，controller 集成已批准变更、更新 spec status、创建完成 commit、清理任务 worktree，并关闭任务 agent。
+9. 重新读取 spec / TodoWrite，选择 spec 顺序中的下一个未完成 feature slice，直到本轮范围完成。
+10. 所有任务集成后，在 `controller` 开发分支派发一个 fresh 收尾验证 subagent，顺序执行完整测试、关键 smoke check 和最终全量实现 review；全部通过后 controller 报告完成状态。
 
-Convert that into four task lanes with explicit owners, write scopes, and verification. Run the auth/API/button/date lanes in parallel only where their write scopes are disjoint. Each lane still follows the full workflow: task worktree, implementer, spec review, code-quality review, integration, task completion commit, and cleanup.
+## 追踪与恢复
 
-## The Process
+- 已批准 spec 中的 `Implementation status` checkbox 是持久化进度事实来源。
+- TodoWrite 只负责 session 内执行追踪；重启后必须根据 spec status 重建。
+- 当某个 feature slice 通过双 review 后，controller 在 `controller` 开发分支把该 slice 从 `- [ ] Implementation status: Not done` 更新为 `- [x] Implementation status: Done`。
+- 每个任务都应有一个包含代码/测试变更和对应 spec status 更新的完成 commit。
 
-```dot
-digraph process {
-    rankdir=TB;
+中断后恢复执行前：
 
-    subgraph cluster_per_task {
-        label="Per Task";
-        "Use superpowers:using-git-worktrees to prepare ready task worktrees" [shape=box];
-        "Dispatch implementer subagent(s) for all ready independent tasks (max 5)" [shape=box];
-        "Implementer subagent asks questions?" [shape=diamond];
-        "Answer questions, provide context" [shape=box];
-        "Implementer subagent implements, tests, updates checkboxes per step, self-reviews" [shape=box];
-        "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" [shape=box];
-        "Spec reviewer subagent confirms code matches spec?" [shape=diamond];
-        "Implementer subagent fixes spec gaps" [shape=box];
-        "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [shape=box];
-        "Code quality reviewer subagent approves?" [shape=diamond];
-        "Implementer subagent fixes quality issues" [shape=box];
-        "Controller integrates approved task into controller development branch" [shape=box];
-        "Controller creates task completion commit on controller development branch" [shape=box];
-        "Controller cleans up task worktree via superpowers:using-git-worktrees + closes task agents" [shape=box];
-        "Mark task complete in TodoWrite" [shape=box];
-    }
+1. 重新读取已批准 spec。
+2. 对比 spec status 与当前仓库状态（`git status`、最近 commit、被改动文件）。
+3. 重建或校准 TodoWrite。
+4. 确认未完成 slice 仍有足够行为描述、公共接口、验收标准和自动化验证细节。
+5. 检查任务 worktree：已完成任务的残留 worktree 先清理；未完成任务的 worktree 先确认与 spec status 一致。
+6. 若 spec status 与仓库状态不一致，先把 status 对齐到你验证过的真实状态。
+7. 只有 spec、TodoWrite、git 和任务 worktree 状态全部对齐后，才能恢复派发任务。
 
-    "Read plan once, extract tasks + dependencies + write scopes, note context, create TodoWrite" [shape=box];
-    "More tasks remain?" [shape=diamond];
-    "Ready tasks available?" [shape=diamond];
-    "Dispatch final code reviewer subagent for entire implementation" [shape=box];
-    "Verify controller development branch + present 4 next-step options" [shape=box style=filled fillcolor=lightgreen];
+## 任务调度
 
-    "Read plan once, extract tasks + dependencies + write scopes, note context, create TodoWrite" -> "Ready tasks available?";
-    "Ready tasks available?" -> "Use superpowers:using-git-worktrees to prepare ready task worktrees" [label="yes"];
-    "Use superpowers:using-git-worktrees to prepare ready task worktrees" -> "Dispatch implementer subagent(s) for all ready independent tasks (max 5)";
-    "Ready tasks available?" -> "More tasks remain?" [label="no"];
-    "Dispatch implementer subagent(s) for all ready independent tasks (max 5)" -> "Implementer subagent asks questions?";
-    "Implementer subagent asks questions?" -> "Answer questions, provide context" [label="yes"];
-    "Answer questions, provide context" -> "Dispatch implementer subagent(s) for all ready independent tasks (max 5)";
-    "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, updates checkboxes per step, self-reviews" [label="no"];
-    "Implementer subagent implements, tests, updates checkboxes per step, self-reviews" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)";
-    "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" -> "Spec reviewer subagent confirms code matches spec?";
-    "Spec reviewer subagent confirms code matches spec?" -> "Implementer subagent fixes spec gaps" [label="no"];
-    "Implementer subagent fixes spec gaps" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" [label="re-review"];
-    "Spec reviewer subagent confirms code matches spec?" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="yes"];
-    "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" -> "Code quality reviewer subagent approves?";
-    "Code quality reviewer subagent approves?" -> "Implementer subagent fixes quality issues" [label="no"];
-    "Implementer subagent fixes quality issues" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="re-review"];
-    "Code quality reviewer subagent approves?" -> "Controller integrates approved task into controller development branch" [label="yes"];
-    "Controller integrates approved task into controller development branch" -> "Controller creates task completion commit on controller development branch";
-    "Controller creates task completion commit on controller development branch" -> "Controller cleans up task worktree via superpowers:using-git-worktrees + closes task agents";
-    "Controller cleans up task worktree via superpowers:using-git-worktrees + closes task agents" -> "Mark task complete in TodoWrite";
-    "Mark task complete in TodoWrite" -> "Ready tasks available?";
-    "More tasks remain?" -> "Ready tasks available?" [label="yes"];
-    "More tasks remain?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
-    "Dispatch final code reviewer subagent for entire implementation" -> "Verify controller development branch + present 4 next-step options";
-}
-```
+按已批准 spec 中 feature slice 的出现顺序执行，不重新推断或重排执行顺序。
 
-## Tracking and Resume Rules
+- Controller 在开始时读取已批准 spec，并保留其中 feature slice 的原始顺序。
+- 每次只选择 spec 顺序中的下一个 `Implementation status: Not done` feature slice。
+- 如果运行中 spec 有变动，在派发或恢复受影响任务前重新读取相关 spec，并继续按更新后的 spec 顺序执行。
+- Review 调度由当前任务完成事件触发，不做批处理。
 
-- Plan checkbox state is the persistent progress source of truth.
-- TodoWrite is session-local execution tracking and must be rebuilt from plan checkbox state after restarts.
-- Each implementer subagent itself updates its own task's step checkboxes (`- [ ]` → `- [x]`) in the plan file from its assigned task worktree immediately after each step's verification passes. The controller must not do this on the implementer's behalf.
-- The controller does not separately update checkboxes; they arrive via the task branch merge.
-- Each task should have one normal completion commit that includes code/test changes and the plan checkbox updates from the merge.
-- Do not create standalone progress-only commits.
+## 模型与推理策略
 
-If a plan includes a non-checkbox `Task completion action`, execute it after the final verified checkbox step and before marking the task complete.
+除非 human partner 明确要求使用其他模型，否则所有 subagent 都与 controller 使用相同模型。
 
-## Resume Consistency Check (Required After Interruptions)
+- Implementer subagent 使用 `high` 推理强度。
+- Spec reviewer、code-quality reviewer、收尾验证 subagent 和收尾修复 subagent 使用 `xhigh` 推理强度。
+- 如果当前 harness 不支持设置推理强度，就使用最接近的默认值，并明确说明限制。
+- 不要把切换模型当作处理阻塞任务的默认手段；优先补上下文、拆分范围或升级处理。
 
-Before resuming execution in an existing branch/session:
+## 处理 Implementer 状态
 
-1. Compare plan checkbox state with current repo state (`git status`, recent commits, touched files).
-2. Verify TodoWrite matches plan checkbox truth (rebuild TodoWrite if needed).
-3. Inspect task worktrees managed by `superpowers:using-git-worktrees`:
-   - If a completed task still has a task worktree, clean it up before continuing.
-   - If an incomplete task has a task worktree, verify it matches the plan checkbox state before reusing it.
-4. If plan state and repo state are mismatched, reconcile first by updating plan checkboxes to reflect verified reality; do not continue while plan state is stale.
-5. Only resume task execution after plan, TodoWrite, git, and task-worktree state are aligned.
+- **DONE：** 进入 spec review。
+- **DONE_WITH_CONCERNS：** 先阅读疑虑；涉及正确性或范围时先解决，再 review；只是观察性备注时记录后继续 review。
+- **NEEDS_CONTEXT：** 补充缺失上下文后重新派发。
+- **BLOCKED：** 判断阻塞来源：上下文不足就补上下文并用相同模型与 `high` 重新派发；任务太大或 spec 不清就回到 `brainstorming` 拆分或澄清；spec 错误或不完整则回到 `brainstorming` 或升级给人类。
 
-## Dependency Scheduling Rules
+绝不要忽视升级信号，也不要在没有变化的情况下强迫同一个模型继续重试。
 
-Build a dependency-aware execution queue before dispatching implementers.
+## Prompt 模板
 
-- The controller reads the plan **once** at the start, extracts full task text, dependencies, and write scopes, and reuses that extracted context throughout the run.
-- Parse each task's `Depends on` field and file write scope from the plan.
-- A task is `ready` only when all dependencies are complete.
-- Independent ready tasks **must** run in parallel when write scopes are disjoint.
-- Default max concurrency is 5 implementer subagents.
-- Use `superpowers:using-git-worktrees` to assign one isolated task worktree and task branch per active code-changing task lane.
-- If more than 5 tasks are ready, dispatch the highest-priority 5 and keep the rest queued.
-- If two ready tasks touch the same file, run them sequentially.
-- On task completion, re-evaluate ready tasks and dispatch newly unblocked work immediately.
-- Review scheduling is event-driven per task completion, not batch-driven by wave.
+- `./implementer-prompt.md` - 派发 implementer subagent
+- `./spec-reviewer-prompt.md` - 派发 spec reviewer subagent
+- `./code-quality-reviewer-prompt.md` - 派发 code-quality reviewer subagent
+- `./final-integration-reviewer-prompt.md` - 派发收尾验证 subagent
 
-**Priority order for ready tasks:**
-1. Tasks that unblock the most downstream tasks
-2. Tasks with the smallest scope (faster feedback)
-3. Original plan order (tie-breaker)
+## Controller 开发分支收尾（强制）
 
-## Scope Expansion Conflict Protocol
+当所有任务分支已经集成、任务 worktree 已由 `using-git-worktrees` 清理，现场应只剩 `controller` 开发分支。本 skill 的收尾只负责整体验证和完成报告，不规定后续分支处置方式。
 
-If review or implementation reveals that a task's real write scope expanded beyond its declared scope, treat it as a scheduling conflict event.
+派发一个 fresh 收尾验证 subagent，使用 `./final-integration-reviewer-prompt.md`。它负责顺序执行完整测试、关键 smoke check 和最终全量实现 review，并返回统一 verdict。不要为这三步分别派发不同 subagent，除非当前收尾验证 subagent 已经关闭后需要重新验证；也不要用 controller-only 验证替代收尾验证 subagent。
 
-1. Pause completion for that task (do not mark completed, do not commit).
-2. Classify status as `NEEDS_CONTEXT` or `DONE_WITH_CONCERNS` with explicit out-of-scope files.
-3. Remove or stash out-of-scope edits so only declared-scope changes remain for the current task.
-4. Update dependency graph and ownership:
-   - Add/adjust `Depends on` edges for newly discovered coupling
-   - Assign one task as owner for each shared file
-   - Convert conflicting tasks from parallel to sequential execution
-5. If conflict affects active parallel workers, cap that conflict group at concurrency 1 until resolved.
-6. Create follow-up task(s) for out-of-scope work, then resume normal scheduling.
+Controller 只负责任务上下文、记录 verdict、关闭已完成或失败的收尾验证 subagent、派发修复 subagent 和完成报告。如果收尾验证 subagent 发现问题，controller 记录 verdict 后关闭它，并派发一个新的 `xhigh` 收尾修复 subagent 在 `controller` 开发分支修复；修复后再派发新的 fresh 收尾验证 subagent 从头重新验证；直到收尾验证 subagent 返回 Approved。
 
-Never force a task to completion when its write scope is ambiguous or conflicts with another active task.
+完成报告必须包含：收尾验证 subagent verdict（完整测试、关键 smoke check、最终 review 三部分）、当前 `controller` 开发分支名，以及任何未消除的 concerns。不要在本 skill 内自行决定或执行后续分支处置。
 
-## Model + Reasoning Policy
-
-Use the same model as the current controller agent for every subagent in this workflow unless your human partner explicitly asks for a different model.
-
-- Implementer subagents use `medium` reasoning.
-- Spec-compliance reviewer subagents use `xhigh` reasoning.
-- Code-quality reviewer subagents use `xhigh` reasoning.
-- Final whole-implementation reviewers use `xhigh` reasoning.
-- Do not switch to a different model as the default response to a blocked task. Add context, split scope, or escalate instead.
-
-## Handling Implementer Status
-
-Implementer subagents report one of four statuses. Handle each appropriately:
-
-**DONE:** Proceed to spec compliance review.
-
-**DONE_WITH_CONCERNS:** The implementer completed the work but flagged doubts. Read the concerns before proceeding. If the concerns are about correctness or scope, address them before review. If they're observations (for example, "this file is getting large"), note them and proceed to review.
-
-**NEEDS_CONTEXT:** The implementer needs information that wasn't provided. Provide the missing context and re-dispatch.
-
-**BLOCKED:** The implementer cannot complete the task. Assess the blocker:
-1. If it's a context problem, provide more context and re-dispatch with the same model and `medium` reasoning
-2. If the task is too large or ambiguous, break it into smaller pieces
-3. If the plan itself is wrong, escalate to the human
-
-**Never** ignore an escalation or force the same model to retry without changes. If the implementer said it's stuck, something needs to change.
-
-## Prompt Templates
-
-- `./implementer-prompt.md` - Dispatch implementer subagent
-- `./spec-reviewer-prompt.md` - Dispatch spec compliance reviewer subagent
-- `./code-quality-reviewer-prompt.md` - Dispatch code quality reviewer subagent
-
-## Controller Development Branch Completion (Mandatory)
-
-After the controller has integrated all task branches and removed their task worktrees via `superpowers:using-git-worktrees`, only the controller development branch should remain. Finish the run inside this skill.
-
-### Step 1: Verify Tests On The Controller Development Branch
-
-**Before presenting options, verify the full project test suite passes on the controller development branch:**
-
-```bash
-# Run the project's full test suite
-npm test / cargo test / pytest / go test ./...
-```
-
-**If tests fail:**
-```
-Tests failing (<N> failures). Must fix before completing:
-
-[Show failures]
-
-Cannot proceed with merge/PR until tests pass.
-```
-
-Stop. Do not proceed to base-branch selection or branch options.
-
-### Step 1.5: Verify Critical Runtime Paths
-
-Before presenting completion options, run at least one public-entrypoint smoke check for each critical trigger-driven workflow implemented by the plan.
-
-- Confirm it does more than return a success contract.
-- Confirm at least one runtime progress signal changes (or reaches terminal state) as required by the spec.
-- If the smoke check reveals "status-only" behavior, reopen the relevant task lane instead of finishing the run.
-
-### Step 2: Determine The Base Branch
-
-```bash
-# Try common base branches
-git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null
-```
-
-Or ask: "This development branch split from main - is that correct?"
-
-### Step 3: Present Exactly These 4 Options
+## 工作流示例
 
 ```
-Implementation complete. What would you like to do?
+You: 我正在使用 Subagent-Driven Development 来实现这份已批准的 spec。
 
-1. Merge current development branch back to <base-branch> locally
-2. Push current development branch and create a Pull Request
-3. Keep the current development branch as-is (I'll handle it later)
-4. Discard the current development branch
+[使用 using-git-worktrees 建立 controller 开发分支和任务 worktree 策略]
+[读取 spec，按出现顺序提取 Not done feature slice、AC、公共入口和验证方式]
+[初始化 TodoWrite，选择 spec 顺序中的第一个未完成 feature slice]
 
-Which option?
-```
+Task 1: Hook installation script
 
-**Do not add explanation.** Keep the options concise.
-
-### Step 4: Execute Choice
-
-#### Option 1: Merge Locally
-
-```bash
-# Switch to base branch
-git checkout <base-branch>
-
-# Pull latest
-git pull
-
-# Merge controller development branch
-git merge <controller-branch>
-
-# Verify tests on merged result
-<test command>
-
-# If tests pass
-git branch -d <controller-branch>
-```
-
-#### Option 2: Push And Create PR
-
-```bash
-# Push controller development branch
-git push -u origin <controller-branch>
-
-# Create PR
-gh pr create --title "<title>" --body "$(cat <<'EOF'
-## Summary
-<2-3 bullets of what changed>
-
-## Test Plan
-- [ ] <verification steps>
-EOF
-)"
-```
-
-#### Option 3: Keep As-Is
-
-Report: "Keeping branch <controller-branch>."
-
-#### Option 4: Discard
-
-**Confirm first:**
-```
-This will permanently delete:
-- Branch <controller-branch>
-- All commits: <commit-list>
-
-Type 'discard' to confirm.
-```
-
-Wait for exact confirmation.
-
-If confirmed:
-
-```bash
-git checkout <base-branch>
-git branch -D <controller-branch>
-```
-
-There is no worktree cleanup step here. The controller should already have removed every task worktree before this point.
-
-## Example Workflow
-
-```
-You: I'm using Subagent-Driven Development to execute this plan.
-
-[Use superpowers:using-git-worktrees to establish the controller development branch and task-worktree policy]
-[Read the plan once: docs/superpowers/plans/feature-plan.md]
-[Extract all 5 tasks with full text, dependencies, and write scopes]
-[Create TodoWrite with all tasks initialized from plan checkbox state]
-[Build ready queue; dispatch up to 5 independent ready tasks in parallel]
-
-Task 1: Hook installation script (ready)
-
-[Create Task 1 task worktree and task branch via superpowers:using-git-worktrees]
-[Dispatch implementation subagent with full task text + context using controller model + medium reasoning]
-
-Implementer: "Before I begin - should the hook be installed at user or system level?"
-
-You: "User level (~/.config/superpowers/hooks/)"
+[创建 Task 1 任务 worktree 和任务分支]
+[使用 controller 模型 + high 推理强度派发 implementer]
 
 Implementer:
-  - Implemented install-hook command
-  - Updated step checkboxes in the plan as each step verified
-  - Added tests, 5/5 passing
-  - Self-review: completeness checked, found I missed --force flag, added it
-  - Ready for review (did not commit)
+  - Added tests and implementation
+  - TDD evidence: watched acceptance test fail, then pass
+  - Self-review complete
+  - DONE
 
-[Dispatch spec compliance reviewer using controller model + xhigh reasoning]
-Spec reviewer: ✅ Spec compliant - all requirements met, nothing extra
-
-[Dispatch code quality reviewer using controller model + xhigh reasoning]
-Code reviewer: ✅ Approved
-
-[Controller integrates Task 1 back into the controller development branch]
-[Controller creates the Task 1 completion commit on the controller development branch]
-[Controller cleans up the Task 1 task worktree via superpowers:using-git-worktrees]
-[Controller closes Task 1 implementer/reviewer agents]
-[Mark Task 1 complete in TodoWrite]
-[Recompute ready queue]
+[派发 spec reviewer：通过]
+[派发 code-quality reviewer：通过]
+[Controller 集成任务分支、更新 spec status、提交、清理 worktree、关闭 agents]
+[重新读取 spec / TodoWrite，选择 spec 顺序中的下一个未完成 feature slice]
 
 ...
 
-[After all tasks]
-[Dispatch final code reviewer using controller model + xhigh reasoning]
-Final reviewer: All requirements met, ready to finish the controller development branch
-[Verify tests on the controller development branch]
-[Determine the base branch]
-[Present the 4 controller-branch options: merge locally / push PR / keep branch / discard branch]
+[所有任务完成后]
+[派发一个 fresh 收尾验证 subagent：完整测试、关键 smoke check、最终 review 均通过]
+[报告 controller 开发分支已通过收尾验证]
 ```
 
-## Advantages
+## 取舍
 
-**vs. Manual execution:**
-- Subagents follow TDD naturally
-- Fresh context per task (no confusion)
-- Parallel-safe (subagents don't interfere)
-- Subagents can ask questions before and during work
-
-**Efficiency gains:**
-- No file-reading overhead for implementers (controller provides full task text directly)
-- Controller curates exactly what context is needed
-- Questions surface before work begins, not after
-- Approved tasks integrate immediately instead of waiting for a batch barrier
-
-**Quality gates:**
-- Self-review catches issues before handoff
-- Two-stage review: spec compliance, then code quality
-- Review loops ensure fixes actually work
-- Final controller-branch completion is explicit, not left vague
-
-**Cost:**
-- More subagent invocations (implementer + 2 reviewers per task + final reviewer)
-- Controller does more prep work (extracting all tasks upfront)
-- Review loops add iterations
-- But catches issues early, which is cheaper than debugging later
+- 收益：fresh context、TDD、自审、两阶段 review 和立即集成能更早暴露问题。
+- 成本：每个任务至少需要一个 implementer、两个 reviewer、可能多轮 re-review，controller 也要做更多前置整理。
+- 适用性：当 spec 清晰、任务可切片时使用；当任务仍模糊或强耦合时先修订 spec。
 
 ## Red Flags
 
-**Never:**
-- Start implementation on `main`/`master` without explicit human consent
-- Skip `superpowers:using-git-worktrees` before dispatching code-changing tasks
-- Skip reviews (spec compliance **or** code quality)
-- Proceed with unfixed issues
-- Dispatch parallel implementers without dependency and write-scope checks
-- Make a subagent read the plan file instead of providing full task text directly
-- Ignore subagent questions
-- Accept "close enough" on spec compliance
-- Start code-quality review before spec compliance is ✅
-- Wait for all implementations to finish before starting reviews
-- Wait for all reviews to finish before starting fixes
-- Wait for another implementer to finish when a completed task has not yet entered spec review
-- Leave a completed task worktree around after integration
-- Create standalone progress-only commits
-- Finish the run without re-verifying tests on the controller development branch
-- Ask an open-ended "what should I do next?" instead of presenting the exact 4 completion options
-- Delete the controller development branch without exact typed `discard` confirmation
-- Reach for a separate finishing skill; controller-branch completion is part of this workflow
-- Accept a task as complete when entrypoints only flip persisted status without any wired execution path
-- Approve acceptance tests that fake runtime transitions via manual persistence mutation
-- Ignore explicit placeholder markers such as "minimum placeholder", "stub runner", or "real implementation later" in production paths
+**绝不要：**
+- 在没有明确人工许可的情况下，直接在 `main` / `master` 上开始实现。
+- 派发会改代码的任务前跳过 `using-git-worktrees`。
+- 跳过 spec review 或 code-quality review。
+- 带着未修问题继续推进，或在 spec review 未通过时开始 code-quality review。
+- 让 subagent 从零散上下文里猜需求，而不是直接给当前 spec 路径、feature slice 标识、AC IDs、公共入口提示和验证预期。
+- 把多个已完成任务攒到最后才 review，或把多个 review 结果攒到最后才修。
+- 任务集成后保留已完成任务 worktree。
+- 在双 review 通过前，把 spec feature slice 标成 done。
+- 在 `controller` 开发分支未通过完整测试、必要 smoke check 和最终 review 时报告完成。
+- 试图找额外 finishing skill；`controller` 分支收尾验证就是这个工作流的一部分。
+- 在入口只切换持久化状态、没有接上真实执行路径时，把任务视为完成。
+- 批准通过手动修改持久化状态来伪造运行时状态迁移的验收测试。
+- 忽略生产路径中明确写着 `"minimum placeholder"`、`"stub runner"`、`"real implementation later"` 之类的占位标记。
 
-**If subagent asks questions:**
-- Answer clearly and completely
-- Provide additional context if needed
-- Do not rush them into implementation
+**如果 subagent 提问：**
+- 清晰、完整地回答。
+- 需要时补充更多上下文。
+- 不要催它仓促开工。
 
-**If reviewer finds issues:**
-- The same implementer fixes them
-- The implementer applies those fixes in the same assigned task worktree
-- The controller records the verdict and closes the reviewer that produced it
-- The controller dispatches a fresh reviewer for the next pass
-- The controller re-dispatches review for that same task immediately
-- Repeat until approved
-- Do not skip the re-review
+**如果 reviewer 发现问题：**
+- 由同一个 implementer 在同一个任务 worktree 中修。
+- Controller 记录 verdict，并关闭产出该 verdict 的 reviewer。
+- Controller 为同一任务派发 fresh reviewer。
+- 重复 fix / re-review，直到通过或明确阻塞。
 
-**If subagent fails task:**
-- The controller dispatches a fix subagent with specific instructions
-- The controller does not try to fix manually in the controller session
+**如果 subagent 执行失败：**
+- Controller 派发带有明确指令的 fix subagent。
+- Controller 不要在自己的 session 里手工修。
 
-## Integration
+## 集成关系
 
-**Required workflow skills:**
-- **superpowers:using-git-worktrees** - REQUIRED: owns task-worktree creation, merge-back, and cleanup
-- **superpowers:writing-plans** - Creates the plan this skill executes
-- **superpowers:requesting-code-review** - Provides the code-reviewer template and findings framework used by reviewer subagents
+**必需的工作流 skill：**
+- **using-git-worktrees** - 约束任务 worktree / 任务分支创建、稳定复用、集成机制和清理
+- **requesting-code-review** - 提供 code-quality reviewer 模板和问题框架
 
-**Subagents should use:**
-- **superpowers:test-driven-development** - Subagents follow TDD for each task
+**Subagent 应使用：**
+- **test-driven-development** - 每个 feature slice 都要遵循 TDD

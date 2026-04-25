@@ -5,7 +5,7 @@ description: Use when completing tasks, implementing major features, or before m
 
 # Requesting Code Review
 
-Dispatch one code-reviewer reviewer agent/subagent to review one concrete change set before issues cascade. In environments with named plugin agents, that reviewer may be `superpowers:code-reviewer`. In environments without named agent dispatch, instantiate an equivalent reviewer from this skill's local `code-reviewer.md` template. Keep the review scoped to the actual diff and requirements.
+Dispatch one code-reviewer reviewer agent/subagent to review one concrete change set before issues cascade. In environments with named plugin agents, that reviewer may be `code-reviewer`. In environments without named agent dispatch, instantiate an equivalent reviewer from this skill's local `code-reviewer.md` template. Keep the review scoped to the actual diff and requirements.
 
 **Core principle:** One focused reviewable unit + explicit diff/spec context + immediate findings handling = useful reviews.
 
@@ -30,8 +30,8 @@ Dispatch one code-reviewer reviewer agent/subagent to review one concrete change
 
 ## Agent Naming
 
-- `superpowers:requesting-code-review` is this skill.
-- `superpowers:code-reviewer` refers to a reviewer agent type on platforms that support named plugin agents.
+- `requesting-code-review` is this skill.
+- `code-reviewer` refers to a reviewer agent type on platforms that support named plugin agents.
 - `code-reviewer.md` in this skill directory is the local reviewer prompt template used to create an equivalent reviewer subagent when named agents are unavailable.
 
 ## How to Request
@@ -45,14 +45,14 @@ HEAD_SHA=$(git rev-parse HEAD)
 **2. Gather review context:**
 
 - `{WHAT_WAS_IMPLEMENTED}` - What you just built
-- `{PLAN_REFERENCE}` - What it should do
+- `{SPEC_REFERENCE}` - The approved spec, feature slice, and acceptance criteria it should satisfy
 - `{DESCRIPTION}` - Brief summary of the scoped change set
 
 **3. Dispatch one code-reviewer reviewer agent/subagent:**
 
 Choose the environment-appropriate dispatch method:
 
-- If the environment supports named plugin agents, use Task tool with `superpowers:code-reviewer`.
+- If the environment supports named plugin agents, dispatch a fresh `code-reviewer` agent/subagent.
 - Otherwise fill the local reviewer prompt template at `code-reviewer.md` and spawn an equivalent reviewer subagent.
 
 Use the same model as the current controller agent and `xhigh` reasoning for every reviewer dispatch unless your human partner explicitly asks otherwise.
@@ -61,7 +61,7 @@ Use the same model as the current controller agent and `xhigh` reasoning for eve
 - `{BASE_SHA}` - Starting commit
 - `{HEAD_SHA}` - Ending commit
 - `{WHAT_WAS_IMPLEMENTED}` - What you just built
-- `{PLAN_REFERENCE}` - What it should do
+- `{SPEC_REFERENCE}` - The approved spec, feature slice, and acceptance criteria it should satisfy
 - `{DESCRIPTION}` - Brief summary
 
 **4. Act on feedback:**
@@ -73,8 +73,8 @@ Use the same model as the current controller agent and `xhigh` reasoning for eve
 
 ## Workflow Boundary
 
-- `superpowers:using-git-worktrees` owns task worktree and task branch lifecycle.
-- `superpowers:subagent-driven-development` owns task-scoped review timing, parallel review scheduling, fix/re-review loops, and fresh-reviewer re-review.
+- `using-git-worktrees` owns task worktree and task branch lifecycle.
+- `subagent-driven-development` owns task-scoped review timing, parallel review scheduling, fix/re-review loops, and fresh-reviewer re-review.
 - This skill owns reviewer dispatch context, the reviewer template, and how findings are categorized and consumed.
 - Workflow-specific wrappers may add extra review-stage checks, but they should reuse this skill's dispatch contract instead of redefining it.
 
@@ -90,7 +90,7 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 [Dispatch code-reviewer reviewer agent/subagent]
   WHAT_WAS_IMPLEMENTED: Verification and repair functions for conversation index
-  PLAN_REFERENCE: Task 2 from docs/superpowers/plans/deployment-plan.md
+  SPEC_REFERENCE: docs/superpowers/specs/conversation-index-spec.md / Task 2 / AC-2, AC-3
   BASE_SHA: a7981ec
   HEAD_SHA: 3df7661
   DESCRIPTION: Added verifyIndex() and repairIndex() with 4 issue types

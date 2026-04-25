@@ -14,11 +14,7 @@ Skills use Claude Code tool names. When you encounter these in a skill, use your
 | `Skill` tool (invoke a skill) | `activate_skill` |
 | `WebSearch` | `google_web_search` |
 | `WebFetch` | `web_fetch` |
-| `Task` tool (dispatch subagent) | No equivalent — Gemini CLI does not support subagents |
-
-## No subagent support
-
-Gemini CLI has no equivalent to Claude Code's `Task` tool. Skills that rely on subagent dispatch such as `subagent-driven-development` cannot run their full workflows. Plan execution requires subagent support; environments without it should inform the user that subagent-driven development is not available.
+| `Task` tool (dispatch subagent) | Harness-provided subagent dispatch |
 
 ## Additional Gemini CLI tools
 
