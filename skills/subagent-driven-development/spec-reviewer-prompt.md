@@ -4,6 +4,7 @@
 
 派发这个 reviewer 时，使用与当前 controller agent 相同的模型，并设置 `xhigh` 推理强度。
 Controller 应在记录 verdict 后立即关闭这个 reviewer。
+Controller 不应仅因 `wait_agent` 超时或 reviewer running 时间较长而关闭或重启它。
 如果环境不支持设置推理强度，使用最接近的默认值，并明确说明这个限制。
 
 **目的：** 验证实现者是否构建了被要求的内容，不多也不少
@@ -21,6 +22,20 @@ Controller 应在记录 verdict 后立即关闭这个 reviewer。
     - 验收标准 IDs：[AC IDs]
     - 公共入口提示：[CLI/API/UI/config/file/event entrypoints]
     - 预期自动化验证：[test/smoke command or scenario]
+    - 任务 worktree：[assigned task worktree path]
+
+    ## Review 轮次
+
+    - Review 类型：[initial full review | focused re-review]
+    - 上一轮阻塞 verdict（focused re-review 时必填）：[prior reviewer verdict]
+    - Fixer 报告（focused re-review 时必填）：[fixer report]
+    - Git index 约定（focused re-review 时必填）：staged changes 是上一轮已审基线；unstaged changes 是本轮修复
+
+    Initial full review 必须完整审查当前任务的 spec/AC、公共入口、真实任务 diff、相关测试和运行时语义要求。
+    Focused re-review 默认只聚焦上一轮 blocker、unstaged 本轮修复以及这些改动触及的最终文件；不要从头重复完整审查。
+    在任务 worktree 内运行 `git diff` 查看本轮修复，必要时运行 `git diff --staged` 理解上一轮已审基线。
+    如果 focused re-review 时没有 unstaged changes，返回 ❌ Issues found，要求 controller 确认 fixer 是否实际修改或是否误操作了 stage。
+    如果本轮修复触及公共入口、测试策略、核心数据流或大范围重写，返回 ❌ Issues found，并要求 controller 升级为完整 review。
 
     ## 规格定位
 
@@ -82,5 +97,6 @@ Controller 应在记录 verdict 后立即关闭这个 reviewer。
 
     输出：
     - ✅ Spec compliant（如果代码检查后确认一切匹配）
+    - ✅ Re-review passed（focused re-review 时：上一轮 blocker 已解决，且修复未引入新的阻塞问题）
     - ❌ Issues found: [具体列出缺失或多余的内容，并附 file:line 引用]
 ```

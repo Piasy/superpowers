@@ -265,6 +265,3 @@ You: 我正在使用 `using-git-worktrees` skill 来建立隔离工作区。
 **被以下工作流调用：**
 - **subagent-driven-development** - 在执行会改代码的任务前必须使用；该 skill 负责这些隔离任务 worktree 上的 review/fix/re-review 编排
 - 任何需要隔离任务 worktree 的工作流
-
-**被 review 工作流引用：**
-- **requesting-code-review** - review 请求可以使用调用方提供的任务分支 / 任务 worktree 上下文，但该 skill 不拥有 worktree 生命周期

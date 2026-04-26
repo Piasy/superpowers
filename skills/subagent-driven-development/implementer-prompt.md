@@ -81,8 +81,10 @@ Controller 应将通过 `using-git-worktrees` 准备好的任务 worktree 和任
     reviews 通过后的任务完成 commit 由 controller 负责。
 
     因此，在这次实现过程中 **不要执行 `git commit`**。
-    如有需要你可以 stage 改动，但把 commit 的创建留给 controller，
-    等 reviews 通过且任务分支被集成后再做。
+    也不要执行 `git add`、`git reset`、`git restore --staged`
+    或其他 stage/unstage 操作，除非 controller 在当前消息中明确要求。
+    Controller 可能会把 staged index 用作 re-review 基线；你的实现或修复应留在
+    worktree diff 中，等 reviews 通过且任务分支被集成后由 controller 处理。
 
     ## 代码组织
 
