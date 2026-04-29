@@ -22,9 +22,7 @@ Spec reviewer 负责“不多不少地满足已批准 spec”；code-quality rev
 
     - Spec 文件：[SPEC_FILE_PATH or parent/child spec paths]
     - Feature slice 标识：[FEATURE_SLICE_NAME or heading/ID]
-    - 验收标准 IDs：[AC IDs]
-    - 公共入口提示：[CLI/API/UI/config/file/event entrypoints]
-    - 预期自动化验证：[test/smoke command or scenario]
+    - 验收标准 IDs：[AC IDs]（每条 AC 自身的"触发 / 必须可观察 / 验证手段（及降级理由）"已包含公共入口和验证方式；slice 通用的主路径 boilerplate、默认断言层级、防 mock 逃逸禁令、调试产物落盘约定见同一 slice 的 `Shared Verification Baseline`）
     - 任务 worktree：[assigned task worktree path]
     - Base commit：[BASE_SHA]
     - Head commit：[HEAD_SHA]

@@ -12,7 +12,7 @@ description: Use when creating features, building components, adding functionali
 ## 硬性门禁
 
 - **禁止：** 在 spec 获得用户批准前，调用任何实现类 skill、写代码、搭建项目脚手架，或采取任何实现动作。
-- **禁止：** 在父子 spec 场景中一次性写完多个剩余子 spec。每轮只允许编写或修订一个当前子 spec；其他候选子 spec 留在父 spec 的 `Candidate Future Split Specs` 中，等待后续轮次处理。
+- **禁止：** 在父子 spec 场景中一次性写完多个剩余子 spec。拆分追踪、命名、相对链接和共享约束继承规则见 [split-spec-conventions.md](./split-spec-conventions.md)。
 - **适用范围：** 所有项目，无论看起来多简单。
 - **恢复规则：** review 或用户反馈要求回退时，先判断反馈影响的是产品语义、范围拆分、当前 spec 内容，还是已写出的多份 spec 文档。回到能解决问题的最早必要阶段，不要无条件重跑整条流程。
 
@@ -31,7 +31,7 @@ description: Use when creating features, building components, adding functionali
 5. **定义验收证据** — 识别公共入口、可观察行为、失败模式、自动化验证
 6. **提出 2-3 种方案** — 说明权衡，并给出你的推荐
 7. **展示验收驱动的 spec** — 按复杂度分章节展示，每个章节都获取用户确认
-8. **写入 spec 文档** — 保存到 `docs/superpowers/specs/YYYY-MM-DD-<topic>-spec.md`
+8. **写入 spec 文档** — 保存到 `docs/LittlePower/specs/YYYY-MM-DD-<topic>-spec.md`
 9. **Subagent review spec** — 必须启动同模型、最高推理强度的 reviewer subagent，使用 `spec-document-reviewer-prompt.md` 审查 spec
 10. **更新交接文档**（如果拆分成父子 spec）— 每写完或修订一个子 spec 后，更新 `./.tmp/brainstorming-handoff-YYYY-MM-DD-<topic>.md`
 11. **Subagent review spec set**（如果拆分成父子 spec）— 父 spec 和所有子 spec 都通过单份 review 后，必须启动整体 reviewer subagent 审查整组 spec；未拆分的单份 spec 跳过此步骤
@@ -93,16 +93,16 @@ flowchart TD
 - **Spec 长度信号：** 如果单个 spec 超过约 500 行，把它视为强拆分信号。优先寻找独立用户目标、公共入口、数据生命周期阶段或风险边界，将其拆成多个更小的验收驱动 spec。
 - 只有当一个超过 500 行的 spec 仍然是单一内聚交付物，且长度主要来自必要的验收矩阵或接口示例，而不是实现步骤时，才保留它。
 - 常见拆分维度：按用户 journey 拆；按公共入口拆；按数据生命周期拆；按风险边界拆；按可独立验收的 feature slice 拆。
-- 拆分后保留父 spec。每次只写一个当前子 spec；禁止为了“省事”或“顺手”一次性写完所有剩余子 spec。父 spec 的 `Split Specs` 章节只列已经写出的子 spec，并为每个子 spec 添加实现进度 checkbox，例如 `- [ ] Implementation status: Not done`。
-- 父 spec 的 `Candidate Future Split Specs` 章节列后续可能需要写的候选子 spec。候选项不加 checkbox，因为它们还不是已写出的可追踪子 spec。
-- 子 spec 文件名必须继承父 spec 前缀：父 spec 使用 `docs/superpowers/specs/YYYY-MM-DD-<topic>-spec.md`；子 spec 使用 `docs/superpowers/specs/YYYY-MM-DD-<topic>-<slice>-spec.md`。不要为子 spec 换日期、换 topic 前缀或使用无关联命名。
+- 父子 spec 的拆分追踪、命名、相对链接和 `Global Constraints` 继承规则统一见 [split-spec-conventions.md](./split-spec-conventions.md)。
 
 **定义验收证据：**
 
 - spec 是唯一持久化事实来源。它负责产品语义；不要把这些语义留给后续实现过程去发明。
 - 找出行为被触发或观察到的每一种公共方式：CLI 命令、API endpoint、UI 流程、文件格式、配置项、事件、日志、持久化产物，或其他外部契约。
-- 对每个 feature slice，定义尽可能通过公共入口执行的自动化验证。优先使用可在 CI 中运行的集成测试或端到端测试，并观察真实产物、状态变化、UI/API 输出或错误反馈，而不是断言内部实现细节。
-- 每条验收标准都应该映射到一个自动化验证用例。如果用集成测试或端到端测试覆盖不合理，说明替代自动化检查方式，以及为什么它足够。
+- 对每个 feature slice，把"行为契约"和"如何自动化验证"一起写进单一 `Acceptance Criteria` 章节：每条 AC 自带触发动作、必须可观察的结果，以及对应的验证手段；优先使用可在 CI 中运行、通过公共入口执行的集成测试或端到端测试。`Acceptance Criteria` 是 feature slice 中承载验收行为契约和验证手段的唯一章节。
+- 把 slice 内对所有 AC 都生效的测试基线（主路径 boilerplate、默认断言层级、防 mock 逃逸禁令、调试产物落盘约定）抽到 `Shared Verification Baseline` 子段，避免在每条 AC 内重述。
+- 如果某条 AC 用集成/E2E 测试覆盖不合理，在该 AC 的"降级理由"子项中说明替代自动化检查方式，以及为什么它足够；主路径直接覆盖的 AC 省略该子项。
+- 每条 AC 的"必须可观察"必须完整覆盖该 AC 的行为契约（状态变化、产物、UI/API 输出、错误反馈），不得为了避免与"验证手段"重复而缩水；"验证手段"只补充测试技术细节（测试类型、复用入口、关键断言点），不重述行为契约。
 - 包含重要失败场景和边界场景。如果 feature slice 只描述 happy path，它就是不完整的。
 - 写清非目标和边界，避免 agent 扩大范围或用臆造行为填补空白。
 - 明确 mock/stub 边界。只有在不可避免时，才允许 fake 外部服务；核心行为不得通过 mock 逻辑、no-op 路径、硬编码 fixture 或直接状态修改来满足。
@@ -123,79 +123,18 @@ flowchart TD
 
 **Spec 结构：**
 
-除非用户要求其他格式，否则使用这个结构：
+除非用户要求其他格式，否则按下面的模板文件生成 spec：
 
-```markdown
-# [Feature Name] Spec
+- 未拆分单份 spec：见 [single-spec-template.md](./single-spec-template.md)
+- 已拆分子 spec：见 [child-spec-template.md](./child-spec-template.md)
+- 已拆分父 spec：见 [parent-spec-template.md](./parent-spec-template.md)
+- 父子 spec 交接文档：见 [brainstorming-handoff-template.md](./brainstorming-handoff-template.md)
 
-## Goal
-[一句话描述用户可见结果]
-
-## Global Constraints
-- [仓库/产品约束、兼容性、依赖限制]
-- 核心行为必须通过公共入口验证；mock/stub/no-op 路径不得满足验收。
-
-## Feature Slice 1: [用户可见能力]
-
-- [ ] Implementation status: Not done
-
-### Behavior
-- [用户能做什么或观察到什么]
-- [状态变化、输出、产物或副作用]
-
-### Public Interface
-- [CLI/API/UI/config/file/event 入口和契约]
-
-### Error and Boundary Cases
-- [失败模式和要求的用户/API 反馈]
-- [重要限制、空状态、权限问题、非法输入等]
-
-### Non-goals
-- [明确不在范围内的行为]
-
-### Acceptance Criteria
-- AC-1: [必须成立的可观察行为]
-- AC-2: [必须成立的失败/边界行为]
-- 如果包含 trigger-driven workflow，AC 必须覆盖公共 trigger 到真实执行路径，以及可观察的进展或终态信号。
-
-### Automated Verification
-- [集成/E2E 测试类型、路径或命令；如果未知，写精确的 CI-runnable 验证场景]
-- 每条 AC 至少映射到一个自动化测试用例。
-- 测试必须执行 [public entrypoint] 并观察 [artifact/state/output]。
-- 如果某条 AC 无法合理用集成/E2E 测试覆盖，说明更低层级的自动化验证方式，以及为什么它足够。
-- 测试必须能在只有脚手架、硬编码成功、直接状态修改或绕过真实执行路径的实现上失败。
-
-### Done When
-- 所有验收标准都通过自动化验证。
-- 没有核心需求是通过直接状态修改、硬编码数据、占位行为或 fake integration 满足的。
-```
-
-Feature slice 是后续实现阶段的进度检查点。checkbox 对应这个 slice 的验收已通过，而不是 brainstorming 阶段完成、创建文件、编写 helper、运行命令之类的实现杂项。
-
-如果需求被拆成多个子 spec，父 spec 使用这个结构追踪整体进度：
-
-```markdown
-# [Feature Name] Spec
-
-## Goal
-[一句话描述整体用户可见结果]
-
-## Split Specs
-
-### [Slice Name]
-
-- [ ] Implementation status: Not done
-- Spec: `docs/superpowers/specs/YYYY-MM-DD-<topic>-<slice>-spec.md`
-- Scope: [这个子 spec 负责的用户目标/公共入口/风险边界]
-- Acceptance summary: [这个子 spec 完成后能被独立验收的结果]
-
-## Candidate Future Split Specs
-
-- [Candidate slice name]: [为什么可能需要拆成独立子 spec]
-- [Candidate slice name]: [触发它进入 Split Specs 的条件]
-```
-
-父 spec 只负责说明整体目标、拆分边界、已写出子 spec 的链接和进度，以及未来候选拆分。具体行为、验收标准和自动化验证写在对应子 spec 中。`Candidate Future Split Specs` 不使用 checkbox；只有子 spec 实际写出后，才把它移动到 `Split Specs` 并添加状态 checkbox。
+补充规则：
+- Feature slice 的 checkbox 对应该 slice 的验收已通过，而不是 brainstorming 阶段完成、创建文件、编写 helper、运行命令之类的实现杂项。
+- 父 spec 负责整体目标、共享 `Global Constraints`、拆分边界、已写子 spec 链接和未来候选拆分。
+- 子 spec 负责具体行为、公共接口、错误边界、验收标准和自动化验证。
+- 父子 spec 的共享约束继承和相对链接写法见 [split-spec-conventions.md](./split-spec-conventions.md)。
 
 **父子 Spec 交接文档：**
 
@@ -208,50 +147,7 @@ Feature slice 是后续实现阶段的进度检查点。checkbox 对应这个 sl
 - 交接文档不替代父 spec 的 `Split Specs` 和 `Candidate Future Split Specs`；候选子 spec 信息仍以父 spec 为准
 - 未拆分的单份 spec 不需要交接文档
 
-使用这个结构：
-
-```markdown
-# Brainstorming 交接：[Topic]
-
-## 当前进展
-- 父 spec：`docs/superpowers/specs/YYYY-MM-DD-<topic>-spec.md`
-- 已写子 spec：
-  - `docs/superpowers/specs/YYYY-MM-DD-<topic>-<slice>-spec.md` — 单份 review：Approved；用户确认：未确认
-- 整体 review：未开始 / Approved / Issues Found
-- 用户 review：未开始 / 已批准 / 需修改
-
-## 下一步计划
-- 下一步要写的子 spec：`[slice name]`
-- 选择它作为下一步的原因：
-- 开始前是否必须先问用户：是 / 否
-- 如果需要提问，优先问这一题：
-
-## 已确认决策
-- [用户已经确认的产品语义、范围边界、非目标、公共入口或命名约定]
-- [不要在新对话中重新发明或推翻，除非用户明确修改]
-
-## 后续子 spec 所需信息
-- 必读 spec：
-  - `docs/superpowers/specs/YYYY-MM-DD-<topic>-spec.md`
-- 必读代码或文档：
-  - `[path]` — [为什么需要读]
-- 必须保留的约束：
-  - [兼容性、依赖限制、公共入口、验收证据、mock/stub 边界]
-
-## 未决问题
-- 问题：
-  - 阻塞什么：
-  - 为什么必须先澄清：
-
-## Reviewer 备注
-- 最近一次单份 review：Approved / Issues Found
-- 最近一次整体 review：未开始 / Approved / Issues Found
-- 已修复的问题：
-- 仍需注意的问题：
-
-## 恢复指令
-新的 agent 对话应先读取本交接文档、父 spec 和所有已写子 spec。只继续编写“下一步计划”中的一个子 spec；禁止一次性写完所有剩余子 spec。不要重写已批准内容；只有用户反馈或 reviewer issues 要求时，才修订既有 spec。
-```
+交接文档模板见 [brainstorming-handoff-template.md](./brainstorming-handoff-template.md)。
 
 **隔离性和清晰性设计：**
 
@@ -270,9 +166,9 @@ Feature slice 是后续实现阶段的进度检查点。checkbox 对应这个 sl
 
 **文档：**
 
-- 把已验证的 spec 写入 `docs/superpowers/specs/YYYY-MM-DD-<topic>-spec.md`
+- 把已验证的 spec 写入 `docs/LittlePower/specs/YYYY-MM-DD-<topic>-spec.md`
   - 用户偏好的 spec 路径优先于这个默认路径
-- 如果拆成多个子 spec，父 spec 保持 `YYYY-MM-DD-<topic>-spec.md`；当前已写出的子 spec 使用 `YYYY-MM-DD-<topic>-<slice>-spec.md`，并在父 spec 的 `Split Specs` 中用 `Implementation status` checkbox 追踪状态；未来候选子 spec 放在 `Candidate Future Split Specs`，不加 checkbox
+- 如果拆成多个子 spec，父子 spec 的命名、追踪和链接规则统一遵循 [split-spec-conventions.md](./split-spec-conventions.md)
 - 不要自动提交 spec 文档；用户决定是否提交
 
 **Spec Review Gate：**
@@ -281,9 +177,19 @@ Feature slice 是后续实现阶段的进度检查点。checkbox 对应这个 sl
 - **强制启动：** 必须启动 subagent；不要因为任何默认“不启动 subagent”的原则而跳过。
 - **模型要求：** reviewer subagent 必须使用与当前 agent 相同的模型。
 - **推理强度：** reviewer subagent 必须使用当前环境支持的最高推理强度（例如 `xhigh`、`max` 或等价设置）；如果环境不支持设置推理强度，使用可用默认值并说明。
-- **Prompt：** 使用 `skills/brainstorming/spec-document-reviewer-prompt.md`，并传入实际 spec 文件路径。
+- **Prompt：** 使用 `skills/brainstorming/spec-document-reviewer-prompt.md`，并传入实际 spec 文件路径、目标项目仓库路径和 review 类型；focused re-review 还必须传入上一轮 blocker verdict 与修订摘要。
 - **职责：** reviewer 只审查 spec 是否验收驱动、范围合适、可独立 review/实现/验收、CI 验收充分、且没有 mock/stub/no-op 逃逸路径；不要让 reviewer 重写 spec。
-- **处理结果：** 如果 reviewer 返回 Issues Found，按问题类型恢复流程：产品语义不清时回到澄清；范围过大或边界错误时回到范围与拆分；验收证据、方案、公共接口或文档表述有问题时修订当前 spec，并再次启动新的 reviewer subagent。只有 reviewer 返回 Approved 后，当前 spec 才能进入后续整体 review。
+- **处理结果：** 如果 reviewer 返回 Issues Found，按问题类型恢复流程：产品语义不清时回到澄清；范围过大或边界错误时回到范围与拆分；验收证据、方案、公共接口或文档表述有问题时修订当前 spec，并再次启动新的 reviewer subagent。修订后的 re-review 默认按下方 Focused Re-review 规则执行。只有 reviewer 返回 Approved 后，当前 spec 才能进入后续整体 review。
+
+**Spec Review 的 Focused Re-review：**
+当 review 或用户反馈要求修改已写好的 spec 时，不要让下一轮 fresh reviewer 默认从头完整审查。默认使用 focused re-review，只验证上一轮阻塞问题是否解决、本轮修订是否引入新的阻塞问题、以及被修订章节的最终内容是否仍与 spec 整体一致。
+
+- **Fresh reviewer 仍然必须使用：** 记录上一轮 verdict 后关闭旧 reviewer；re-review 派发新的 reviewer subagent。
+- **Git index 基线：** 该规则假设 brainstorming 阶段目标仓库没有其他并行写入。在修订前，于目标项目仓库运行 `git add -A`，把上一轮已审 spec 状态固定为 staged baseline。修订 spec 后保持本轮修订为 unstaged diff；不要在 re-review 前再次 `git add`。如果发现明显无关的未提交改动，先停下协调，不要把无关 diff 带进 re-review baseline。
+- **Prompt 输入：** focused re-review prompt 必须包含上一轮 blocker verdict、修订摘要、实际 spec 路径、目标仓库路径，以及 Git index 约定：`staged changes 是上一轮已审基线；unstaged changes 是本轮修订`。
+- **Reviewer 查看方式：** reviewer 在目标仓库内用 `git diff` 查看本轮修订，必要时用 `git diff --staged` 理解已审基线；不要把完整 diff 粘进 prompt。
+- **升级完整 review：** 如果本轮修订改变了产品目标、拆分边界、公共入口、验收策略、核心失败模式，或大范围重写 spec，focused re-review 不够，必须改派 `initial full review`。
+- **通过后推进基线：** focused re-review Approved 后，在目标项目仓库运行 `git add -A`，把最终获批 spec 状态推进为新的 staged baseline，再进入后续整体 review 或用户 review。不要自动提交 spec 文档。
 
 **Spec Set Review Gate（仅限拆分后的父子 spec）：**
 父 spec 和所有已写出的子 spec 都分别通过单份 Subagent Review Gate 后，必须启动一个整体 reviewer subagent 审查整组 spec：
@@ -291,9 +197,9 @@ Feature slice 是后续实现阶段的进度检查点。checkbox 对应这个 sl
 - **强制启动：** 必须启动 subagent；不要因为任何默认“不启动 subagent”的原则而跳过。
 - **模型要求：** 整体 reviewer subagent 必须使用与当前 agent 相同的模型。
 - **推理强度：** 整体 reviewer subagent 必须使用当前环境支持的最高推理强度（例如 `xhigh`、`max` 或等价设置）；如果环境不支持设置推理强度，使用可用默认值并说明。
-- **Prompt：** 使用 `skills/brainstorming/spec-set-reviewer-prompt.md`，并传入父 spec 路径和所有已写出的子 spec 路径。
+- **Prompt：** 使用 `skills/brainstorming/spec-set-reviewer-prompt.md`，并传入父 spec 路径、所有已写出的子 spec 路径、目标项目仓库路径和 review 类型；focused re-review 还必须传入上一轮整体 blocker verdict 与修订摘要。
 - **职责：** reviewer 只审查父子 spec 的整体一致性、覆盖完整性、拆分追踪、命名规则、跨 spec 冲突和范围漂移；不要让 reviewer 重写 spec。
-- **处理结果：** 如果整体 reviewer 返回 Issues Found，修订相关 spec；被修订的单份 spec 必须重新通过单份 reviewer，然后再次启动新的整体 reviewer subagent。只有整体 reviewer 返回 Approved 后，才能进入用户 Review Gate。
+- **处理结果：** 如果整体 reviewer 返回 Issues Found，修订相关 spec；被修订的单份 spec 必须重新通过单份 reviewer，然后再次启动新的整体 reviewer subagent。修订后的整体 re-review 默认按 Focused Re-review 规则只审上一轮跨文档 blocker 和本轮修订；如果修订改变拆分边界、增删子 spec、改变父 spec 交付地图或大范围重写，升级为完整整体 review。只有整体 reviewer 返回 Approved 后，才能进入用户 Review Gate。
 
 **用户 Review Gate：**
 未拆分的单份 spec 通过单份 review 后，请用户 review 该 spec。拆分后的父 spec 和所有子 spec 都通过单份 review，且整组 spec 通过整体 review 后，请用户 review 全部已写好的 spec：

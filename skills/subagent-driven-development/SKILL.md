@@ -37,6 +37,7 @@ description: Use when implementing an approved spec with task-specific code-chan
 ## 任务执行规则（强制）
 
 - 当前任务未完成 spec review、code-quality review、集成和清理前，不要开启下一个会改代码的实现任务。
+- 如果当前任务是接手一个已有部分实现或前序 review 未通过的已有 worktree，仍然必须严格遵循本 skill 的 subagent 流程：补充实现或修复工作必须由同一个 implementer subagent 在同一个任务 worktree 内完成，不得由 controller 直接修改；完成后必须重新派发全新的 spec reviewer 和 code-quality reviewer 进行双阶段 review。
 - Subagent 不继承 controller 的完整 session 历史；controller 只构造该任务真正需要的输入。
 - Controller 必须提供已批准 spec 路径、feature slice 标识、AC ID 集合、公共入口提示、验证预期和必要代码上下文。
 - Implementer 和 spec reviewer 必须直接读取 spec 文件来定位当前 slice 和 AC。
@@ -92,7 +93,7 @@ description: Use when implementing an approved spec with task-specific code-chan
 - 如果 reviewer 在返回 verdict 前提出澄清问题，可以在同一个 reviewer 线程内回答；一旦 verdict 被记录，后续 re-review 必须使用 fresh reviewer。
 - 每个 spec reviewer 和 code-quality reviewer 的 verdict 一旦被记录，立刻关闭它。
 - 要求修改的 reviewer 也要在记录问题后关闭；下一轮 review 使用 fresh reviewer。
-- 除非任务被显式暂停或移交，同一个 implementer/fixer 贯穿该任务的 review-fix-re-review 循环。
+- 除非任务被显式暂停或移交，同一个 implementer/fixer 贯穿该任务的 review-fix-re-review 循环。即使任务是接手已有部分实现的 worktree，该 worktree 的后续补充实现或修复仍由同一个 implementer/fixer subagent 负责，不得由 controller 直接修改。
 - 一旦 code-quality review 通过，且 controller 已创建任务完成 commit 并清理任务 worktree，立刻关闭该任务的 implementer/fixer agent。
 - 在 Codex 中，只要任务 agent 空闲，就显式调用 `close_agent`。
 
@@ -147,7 +148,7 @@ flowchart TD
 2. 对比 spec status 与当前仓库状态（`git status`、最近 commit、被改动文件）。
 3. 重建或校准 TodoWrite。
 4. 确认未完成 slice 仍有足够行为描述、公共接口、验收标准和自动化验证细节。
-5. 检查任务 worktree：已完成任务的残留 worktree 先清理；未完成任务的 worktree 先确认与 spec status 一致。
+5. 检查任务 worktree：已完成任务的残留 worktree 先清理；未完成任务的 worktree 先确认与 spec status 一致。若存在已有部分实现的 worktree，后续补充实现仍必须走完整 subagent 流程（同一 implementer subagent 修复/补充 + 全新 fresh reviewer 双阶段 review），不得由 controller 直接继续开发。
 6. 若 spec status 与仓库状态不一致，先把 status 对齐到你验证过的真实状态。
 7. 只有 spec、TodoWrite、git 和任务 worktree 状态全部对齐后，才能恢复派发任务。
 

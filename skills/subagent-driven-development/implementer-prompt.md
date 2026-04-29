@@ -17,9 +17,7 @@ Controller 应将通过 `using-git-worktrees` 准备好的任务 worktree 和任
 
     - Spec 文件：[SPEC_FILE_PATH or parent/child spec paths]
     - Feature slice 标识：[FEATURE_SLICE_NAME or heading/ID]
-    - 验收标准 IDs：[AC IDs]
-    - 公共入口提示：[CLI/API/UI/config/file/event entrypoints]
-    - 预期自动化验证：[test/smoke command or scenario]
+    - 验收标准 IDs：[AC IDs]（每条 AC 自身的"触发 / 必须可观察 / 验证手段（及降级理由）"已包含公共入口和验证方式；slice 通用的主路径 boilerplate、默认断言层级、防 mock 逃逸禁令、调试产物落盘约定见同一 slice 的 `Shared Verification Baseline`）
 
     ## 任务定位
 
@@ -56,6 +54,8 @@ Controller 应将通过 `using-git-worktrees` 准备好的任务 worktree 和任
     5. 回报结果（先不要提交 commit）
 
     在此位置工作：[assigned task worktree prepared via using-git-worktrees]
+
+    如果这是接手一个已有部分实现或前序 review 未通过的任务 worktree，你仍然必须按本流程完成全部实现、自审和汇报；controller 会在你汇报后派发全新的 reviewer 进行完整 review。
 
     **工作过程中：** 如果你遇到任何意外或不清楚的地方，**提问**。
     随时暂停下来澄清都可以。不要猜，不要自行脑补。
