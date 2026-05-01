@@ -6,9 +6,20 @@ license: MIT
 
 # Karpathy Guidelines
 
-Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
+**tl;dr — Before editing code, invoke `test-driven-development` skill. No exceptions.**
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+Behavioral guidelines to reduce common LLM coding mistakes, derived from Andrej Karpathy's observations on LLM coding pitfalls.
+
+## 0. Test-Driven Development (mandatory)
+
+**Before modifying any implementation code, invoke the `test-driven-development` skill.** Write the test first, watch it fail, then write the minimum implementation. No exceptions.
+
+- New feature → invoke TDD skill first
+- Bug fix → invoke TDD skill first
+- Refactor → invoke TDD skill first
+- Behavior change → invoke TDD skill first
+
+If you catch yourself thinking "this is too simple to test" — stop. That's self-rationalization. Simple code breaks too. A 30-second test beats a 2-hour debugging session.
 
 ## 1. Think Before Coding
 
@@ -36,6 +47,8 @@ Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, sim
 
 **Touch only what you must. Clean up only your own mess.**
 
+Before making any edits, confirm: Section 0 (TDD) has been executed. There must be a failing test that justifies this change.
+
 When editing existing code:
 - Don't "improve" adjacent code, comments, or formatting.
 - Don't refactor things that aren't broken.
@@ -50,12 +63,12 @@ The test: Every changed line should trace directly to the user's request.
 
 ## 4. Goal-Driven Execution
 
-**Define success criteria. Loop until verified.**
+**Define success criteria. Loop until verified. Start from TDD (Section 0).**
 
 Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+- "Add validation" → "Invoke TDD skill. Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Invoke TDD skill. Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Invoke TDD skill. Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan:
 ```
@@ -65,5 +78,3 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-**When modifying implementation code, always invoke the `test-driven-development` skill first.** Write tests before writing implementation. This catches design issues early and ensures every change is verifiable from the start — not patched with tests after the fact.
