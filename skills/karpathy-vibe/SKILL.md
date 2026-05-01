@@ -65,3 +65,5 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+**When modifying implementation code, always invoke the `test-driven-development` skill first.** Write tests before writing implementation. This catches design issues early and ensures every change is verifiable from the start — not patched with tests after the fact.

@@ -13,8 +13,13 @@ description: Use when creating features, building components, adding functionali
 
 - **禁止：** 在 spec 获得用户批准前，调用任何实现类 skill、写代码、搭建项目脚手架，或采取任何实现动作。
 - **禁止：** 在父子 spec 场景中一次性写完多个剩余子 spec。拆分追踪、命名、相对链接和共享约束继承规则见 [split-spec-conventions.md](./split-spec-conventions.md)。
+- **禁止：** 因为项目里已经存在一组 spec，就默认把新需求写成那组 spec 的新 slice 或子 spec。已有 spec 只能作为上下文；只有用户明确要求扩展那组父 spec，或澄清后确认新需求属于该父 spec 已批准目标 / `Candidate Future Split Specs`，才能继承其 topic 前缀、slice 编号和父子关系；否则必须为新需求创建独立 spec 或新的父子 spec 集合。
 - **适用范围：** 所有项目，无论看起来多简单。
 - **恢复规则：** review 或用户反馈要求回退时，先判断反馈影响的是产品语义、范围拆分、当前 spec 内容，还是已写出的多份 spec 文档。回到能解决问题的最早必要阶段，不要无条件重跑整条流程。
+- **Review 修订顺序：** 单份 spec 或整体 spec set 的 `initial full review` 返回 Issues Found 后，必须按 `记录 blocker verdict -> 关闭旧 reviewer -> 修订前 git add -A 固定上一轮已审 baseline -> 修改 spec -> 保持本轮 fix 为 unstaged diff -> fresh reviewer focused re-review` 执行。
+- **禁止：** focused re-review 前再次 `git add`。reviewer 必须用 `git diff` 查看本轮 fix，必要时用 `git diff --staged` 理解上一轮已审 baseline；如果没有 unstaged diff，先停下确认是否误 stage 或实际未修改。
+- **Review 通过后推进基线：** 只有 focused re-review 返回 Approved 后，才运行 `git add -A` 把最终获批 spec 状态推进为新的 staged baseline；不要自动提交 spec 文档。
+- **升级规则：** 如果修订改变产品目标、拆分边界、公共入口、验收策略、核心失败模式，或大范围重写 spec，不走 focused re-review，改派 `initial full review`。
 
 ## 反模式：“这个太简单了，不需要 Spec”
 
