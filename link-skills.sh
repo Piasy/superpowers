@@ -9,6 +9,7 @@ TARGETS=(
   "$HOME/.codex/skills"
   "$HOME/.claude/skills"
   "$HOME/.factory/skills"
+  "$HOME/.agents/skills"
 )
 
 if [[ ! -d "$SKILLS_DIR" ]]; then

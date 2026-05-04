@@ -20,10 +20,17 @@
 
     ## Review 轮次
 
-    - Review 类型：[initial full review | focused re-review]
-    - 上一轮阻塞 verdict（focused re-review 时必填）：[PRIOR_BLOCKER_VERDICT]
-    - 修订摘要（focused re-review 时必填）：[REVISION_REPORT]
-    - Git index 约定（focused re-review 时必填）：staged changes 是上一轮已审基线；unstaged changes 是本轮 spec 修订
+    只选择下面一种模式填写。
+
+    ### 模式 A：Initial full review
+    - Review 类型：initial full review
+    - 文档状态：controller 直接把当前 spec 文件交给你做完整审查。
+
+    ### 模式 B：Focused re-review
+    - Review 类型：focused re-review
+    - 上一轮阻塞 verdict：[PRIOR_BLOCKER_VERDICT]
+    - 修订摘要：[REVISION_REPORT]
+    - Git index 状态：controller 已在上一轮 verdict 后固定已审 baseline；staged changes 是上一轮已审基线；unstaged changes 是本轮 spec 修订
 
     Initial full review 必须完整审查下面所有检查项。
     Focused re-review 默认只判断上一轮 blocker 是否解决、本轮 unstaged 修订是否引入新的阻塞问题、以及被修订章节的最终内容是否仍与 spec 整体一致。不要从头重复完整审查。

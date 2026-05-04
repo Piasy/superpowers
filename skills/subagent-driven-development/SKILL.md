@@ -60,6 +60,7 @@ description: Use when implementing an approved spec with task-specific code-chan
 
 ### 首次 Review 与 Re-review 范围
 
+- 任务级首次 spec review、首次 code-quality review 和首次收尾验证，都直接基于当前任务上下文、真实 diff、最终代码和测试来审查，并先返回这一轮的完整 verdict。
 - 每个 review 阶段的首次 review 必须保留完整当前任务上下文：当前 slice 的 spec/AC、公共入口、真实任务 diff、相关测试和运行时语义要求。完整上下文指当前任务完整，不是跨任务、跨子 spec 或候选未来范围的无限上下文。
 - 首次 spec review、首次 code-quality review 和触发时的收尾验证都可能耗时较长。Controller 必须保持耐心，质量优先于速度；`wait_agent` 超时只表示当前轮询没有终态结果，不表示 reviewer 失败。
 - Fix 后的 re-review 默认聚焦上一轮阻塞 verdict 和本轮新改动。Controller 不要让 fresh reviewer 从头重复完整审查，除非修复已经扩大为公共入口、测试策略、核心数据流或大范围重写。
@@ -68,8 +69,9 @@ description: Use when implementing an approved spec with task-specific code-chan
 
 ### Fix / Re-review 增量基线
 
-- 在把阻塞 verdict 交给 implementer/fixer 前，controller 应在该任务 worktree 内先 `git add -A`，把当前已审实现固定为 re-review 基线。
+- Staged baseline 只服务于 fix / focused re-review。reviewer 返回阻塞 verdict 后，controller 在对应任务 worktree 内运行 `git add -A`，把刚刚审过的实现固定为 re-review 基线。
 - Controller 必须明确告诉 implementer/fixer：不要执行 `git add`、`git reset`、`git restore --staged`、`git commit` 或其他 stage/unstage 操作；修复应保持为 unstaged worktree diff。
+- 基线固定后，implementer/fixer 在同一 worktree 内继续修复，并把本轮修复保留为 unstaged worktree diff；fresh reviewer 将看到 staged changes = 上一轮已审基线，unstaged changes = 本轮修复。
 - Fixer 返回后，controller 确认该任务 worktree 中 staged changes 仍是已审基线、unstaged changes 是本轮修复。不要把完整 diff 粘进 prompt；告诉 fresh re-reviewer 任务 worktree 路径，并要求它在该 worktree 内用 `git diff` 查看本轮修复，必要时用 `git diff --staged` 理解已审基线。
 - Staged baseline 只是 controller 的 review delta 工具，不代表最终提交内容。双 review 最终通过后，controller 必须确保最终获批 worktree 里的全部代码和测试变更都被纳入集成/完成 commit；不要只提交旧的 staged baseline。
 
@@ -191,6 +193,8 @@ flowchart TD
 当本轮连续实现并集成了多个子 spec，且所有任务分支已经集成、任务 worktree 已由 `using-git-worktrees` 清理，现场应只剩 `controller` 开发分支。本 skill 的收尾只负责整体验证和完成报告，不规定后续分支处置方式。
 
 如果本轮只实现一个单一 spec 或父/子 spec 中的一个子 spec，跳过本节收尾验证；该 spec 的任务级双 review、spec status 更新和必要的 concern 记录就是完成条件。
+
+首次收尾验证先直接返回完整 verdict；如果收尾 reviewer 给出阻塞 verdict，再由 controller 固定这一轮刚审过的 controller 分支状态，作为后续收尾修复的 baseline。
 
 首次派发 fresh 收尾验证 subagent 时，使用 `./final-integration-reviewer-prompt.md` 的 `initial full review` 模式。它负责顺序执行完整测试、关键 smoke check 和最终全量实现 review，并返回统一 verdict。不要为这三步分别派发不同 subagent，除非当前收尾验证 subagent 已经关闭后需要重新验证；也不要用 controller-only 验证替代收尾验证 subagent。
 

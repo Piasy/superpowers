@@ -32,10 +32,17 @@ Spec reviewer 负责“不多不少地满足已批准 spec”；code-quality rev
 
     ## Review 轮次
 
-    - Review 类型：[initial full review | focused re-review]
-    - 上一轮 code-quality 阻塞 verdict（focused re-review 时必填）：[PRIOR_BLOCKER_VERDICT]
-    - Fixer 报告（focused re-review 时必填）：[FIXER_REPORT]
-    - Git index 约定（focused re-review 时必填）：staged changes 是上一轮已审基线；unstaged changes 是本轮修复
+    只选择下面一种模式填写。
+
+    ### 模式 A：Initial full review
+    - Review 类型：initial full review
+    - Worktree 状态：controller 直接把当前任务完整 diff、最终代码、测试和运行时语义风险交给你做完整审查。
+
+    ### 模式 B：Focused re-review
+    - Review 类型：focused re-review
+    - 上一轮 code-quality 阻塞 verdict：[PRIOR_BLOCKER_VERDICT]
+    - Fixer 报告：[FIXER_REPORT]
+    - Git index 状态：controller 已在上一轮 verdict 后固定已审 baseline；staged changes 是上一轮已审基线；unstaged changes 是本轮修复
 
     Initial full review 必须审查当前任务完整 diff、最终代码、测试、TDD 证据、运行时语义风险和维护性。
     Focused re-review 默认只判断上一轮 code-quality blocker 是否解决、unstaged 本轮修复是否引入新的阻塞问题，以及被触及文件的最终状态是否仍可维护。

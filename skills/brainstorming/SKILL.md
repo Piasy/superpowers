@@ -16,9 +16,10 @@ description: Use when creating features, building components, adding functionali
 - **禁止：** 因为项目里已经存在一组 spec，就默认把新需求写成那组 spec 的新 slice 或子 spec。已有 spec 只能作为上下文；只有用户明确要求扩展那组父 spec，或澄清后确认新需求属于该父 spec 已批准目标 / `Candidate Future Split Specs`，才能继承其 topic 前缀、slice 编号和父子关系；否则必须为新需求创建独立 spec 或新的父子 spec 集合。
 - **适用范围：** 所有项目，无论看起来多简单。
 - **恢复规则：** review 或用户反馈要求回退时，先判断反馈影响的是产品语义、范围拆分、当前 spec 内容，还是已写出的多份 spec 文档。回到能解决问题的最早必要阶段，不要无条件重跑整条流程。
-- **Review 修订顺序：** 单份 spec 或整体 spec set 的 `initial full review` 返回 Issues Found 后，必须按 `记录 blocker verdict -> 关闭旧 reviewer -> 修订前 git add -A 固定上一轮已审 baseline -> 修改 spec -> 保持本轮 fix 为 unstaged diff -> fresh reviewer focused re-review` 执行。
-- **禁止：** focused re-review 前再次 `git add`。reviewer 必须用 `git diff` 查看本轮 fix，必要时用 `git diff --staged` 理解上一轮已审 baseline；如果没有 unstaged diff，先停下确认是否误 stage 或实际未修改。
-- **Review 通过后推进基线：** 只有 focused re-review 返回 Approved 后，才运行 `git add -A` 把最终获批 spec 状态推进为新的 staged baseline；不要自动提交 spec 文档。
+- **Initial full review 的时序：** spec 文档写好后，直接派发 fresh reviewer 审查当前文档状态。
+- **Focused re-review 的时序：** 单份 spec 或整体 spec set 的 `initial full review` 返回 Issues Found 后，按 `记录 blocker verdict -> 关闭旧 reviewer -> controller 运行 git add -A 固定刚刚审过的 baseline -> 修改 spec 并让本轮修订保持为 unstaged diff -> 派发 fresh reviewer focused re-review` 执行。
+- **Focused re-review 的查看面：** fresh reviewer 用 `git diff` 查看本轮修订，必要时用 `git diff --staged` 理解上一轮已审 baseline；如果本轮没有 unstaged diff，先确认本轮修订是否已实际写入。
+- **Review 通过后推进基线：** focused re-review 返回 Approved 后，再运行 `git add -A` 把最终获批 spec 状态推进为新的 staged baseline；不要自动提交 spec 文档。
 - **升级规则：** 如果修订改变产品目标、拆分边界、公共入口、验收策略、核心失败模式，或大范围重写 spec，不走 focused re-review，改派 `initial full review`。
 
 ## 反模式：“这个太简单了，不需要 Spec”
@@ -182,15 +183,16 @@ flowchart TD
 - **强制启动：** 必须启动 subagent；不要因为任何默认“不启动 subagent”的原则而跳过。
 - **模型要求：** reviewer subagent 必须使用与当前 agent 相同的模型。
 - **推理强度：** reviewer subagent 必须使用当前环境支持的最高推理强度（例如 `xhigh`、`max` 或等价设置）；如果环境不支持设置推理强度，使用可用默认值并说明。
-- **Prompt：** 使用 `skills/brainstorming/spec-document-reviewer-prompt.md`，并传入实际 spec 文件路径、目标项目仓库路径和 review 类型；focused re-review 还必须传入上一轮 blocker verdict 与修订摘要。
+- **Prompt：** 使用 `skills/brainstorming/spec-document-reviewer-prompt.md`，并传入实际 spec 文件路径、目标项目仓库路径和 review 类型。initial full review 传当前 spec 上下文；focused re-review 传上一轮 blocker verdict、修订摘要，以及 `staged changes = 上一轮已审 baseline / unstaged changes = 本轮修订` 的 Git index 状态。
 - **职责：** reviewer 只审查 spec 是否验收驱动、范围合适、可独立 review/实现/验收、CI 验收充分、且没有 mock/stub/no-op 逃逸路径；不要让 reviewer 重写 spec。
 - **处理结果：** 如果 reviewer 返回 Issues Found，按问题类型恢复流程：产品语义不清时回到澄清；范围过大或边界错误时回到范围与拆分；验收证据、方案、公共接口或文档表述有问题时修订当前 spec，并再次启动新的 reviewer subagent。修订后的 re-review 默认按下方 Focused Re-review 规则执行。只有 reviewer 返回 Approved 后，当前 spec 才能进入后续整体 review。
 
-**Spec Review 的 Focused Re-review：**
+**Spec / Spec Set Review 的 Focused Re-review：**
 当 review 或用户反馈要求修改已写好的 spec 时，不要让下一轮 fresh reviewer 默认从头完整审查。默认使用 focused re-review，只验证上一轮阻塞问题是否解决、本轮修订是否引入新的阻塞问题、以及被修订章节的最终内容是否仍与 spec 整体一致。
 
+- **Initial full review：** 单份 spec review 和整体 spec set review 的首次 review 都直接读取当前文档集合并返回 verdict。
 - **Fresh reviewer 仍然必须使用：** 记录上一轮 verdict 后关闭旧 reviewer；re-review 派发新的 reviewer subagent。
-- **Git index 基线：** 该规则假设 brainstorming 阶段目标仓库没有其他并行写入。在修订前，于目标项目仓库运行 `git add -A`，把上一轮已审 spec 状态固定为 staged baseline。修订 spec 后保持本轮修订为 unstaged diff；不要在 re-review 前再次 `git add`。如果发现明显无关的未提交改动，先停下协调，不要把无关 diff 带进 re-review baseline。
+- **Git index 基线：** 该规则假设 brainstorming 阶段目标仓库没有其他并行写入。上一轮 reviewer 返回 Issues Found 后，controller 在目标项目仓库运行 `git add -A`，把刚刚审过的 spec 状态固定为 staged baseline。随后修订 spec，并把本轮修订保留为 unstaged diff。如果发现明显无关的未提交改动，先停下协调，再建立本轮 baseline。
 - **Prompt 输入：** focused re-review prompt 必须包含上一轮 blocker verdict、修订摘要、实际 spec 路径、目标仓库路径，以及 Git index 约定：`staged changes 是上一轮已审基线；unstaged changes 是本轮修订`。
 - **Reviewer 查看方式：** reviewer 在目标仓库内用 `git diff` 查看本轮修订，必要时用 `git diff --staged` 理解已审基线；不要把完整 diff 粘进 prompt。
 - **升级完整 review：** 如果本轮修订改变了产品目标、拆分边界、公共入口、验收策略、核心失败模式，或大范围重写 spec，focused re-review 不够，必须改派 `initial full review`。
@@ -202,7 +204,7 @@ flowchart TD
 - **强制启动：** 必须启动 subagent；不要因为任何默认“不启动 subagent”的原则而跳过。
 - **模型要求：** 整体 reviewer subagent 必须使用与当前 agent 相同的模型。
 - **推理强度：** 整体 reviewer subagent 必须使用当前环境支持的最高推理强度（例如 `xhigh`、`max` 或等价设置）；如果环境不支持设置推理强度，使用可用默认值并说明。
-- **Prompt：** 使用 `skills/brainstorming/spec-set-reviewer-prompt.md`，并传入父 spec 路径、所有已写出的子 spec 路径、目标项目仓库路径和 review 类型；focused re-review 还必须传入上一轮整体 blocker verdict 与修订摘要。
+- **Prompt：** 使用 `skills/brainstorming/spec-set-reviewer-prompt.md`，并传入父 spec 路径、所有已写出的子 spec 路径、目标项目仓库路径和 review 类型。initial full review 传当前 spec set 上下文；focused re-review 传上一轮整体 blocker verdict、修订摘要，以及 `staged changes = 上一轮已审 baseline / unstaged changes = 本轮 spec set 修订` 的 Git index 状态。
 - **职责：** reviewer 只审查父子 spec 的整体一致性、覆盖完整性、拆分追踪、命名规则、跨 spec 冲突和范围漂移；不要让 reviewer 重写 spec。
 - **处理结果：** 如果整体 reviewer 返回 Issues Found，修订相关 spec；被修订的单份 spec 必须重新通过单份 reviewer，然后再次启动新的整体 reviewer subagent。修订后的整体 re-review 默认按 Focused Re-review 规则只审上一轮跨文档 blocker 和本轮修订；如果修订改变拆分边界、增删子 spec、改变父 spec 交付地图或大范围重写，升级为完整整体 review。只有整体 reviewer 返回 Approved 后，才能进入用户 Review Gate。
 

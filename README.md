@@ -37,7 +37,7 @@ LittlePower 现在主要支持两种工作流：
 $karpathy-vibe <任务描述>
 ```
 
-在这个模式下，不需要启动完整 spec 流程。你可以让 agent 直接改代码、跑必要验证，然后把 diff 和验证结果交给你判断。
+在这个模式下，不需要启动完整 spec 流程。你可以让 agent 直接改代码、跑必要验证，然后把 diff 和验证结果交给你判断。_修改代码时，会默认按照 test-driven-development 流程来。_
 
 仍然可以按需点名使用这些 skills：
 
